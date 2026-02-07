@@ -9,7 +9,6 @@ import java.util.Iterator;
 import java.util.Map;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.json.JSONArray;
 
 /**
  * Data models mirroring {@code src/definitions.ts}.
