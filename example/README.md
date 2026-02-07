@@ -1,11 +1,12 @@
-## Created with Capacitor Create App
+## Example app
 
-This app was created using [`@capacitor/create-app`](https://github.com/ionic-team/create-capacitor-app),
-and comes with a very minimal shell for building an app.
+This example demonstrates the **singleton native queue player** API.
 
-### Running this example
+- **Load Audiobook Queue / Load Podcast Queue**: replaces the native queue.
+- **Background behavior**: while backgrounded, OS media controls still work natively; events may not deliver.
+- **Resync**: when the app returns to foreground, call `getState()` / `getQueue()` to reconcile UI.
 
-To run the provided example, you can use `npm start` command.
+### Running
 
 ```bash
 npm start

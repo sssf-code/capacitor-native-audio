@@ -1,119 +1,116 @@
 import { WebPlugin } from '@capacitor/core';
 
 import type {
-    AudioPlayerDefaultParams,
-    AudioPlayerListenerParams,
-    AudioPlayerListenerResult,
-    AudioPlayerMetadataUpdateListenerEvent,
     AudioPlayerPlugin,
-    AudioPlayerPrepareParams,
+    AddQueueItemsParams,
+    GetItemProgressParams,
+    GetQueueResult,
+    ItemProgress,
+    PlaybackOptions,
+    PlayerState,
+    RemoveQueueItemParams,
+    SeekParams,
+    SetItemProgressParams,
+    SetPlaybackOptionsParams,
+    SetQueueParams,
+    SetRateParams,
+    SetVolumeParams,
+    SkipToIndexParams,
+    SyncQueueParams,
+    SyncQueueResult,
+    MoveQueueItemParams,
 } from './definitions';
 
 export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
-    create(params: AudioPlayerPrepareParams): Promise<{ success: boolean }> {
+    setQueue(params: SetQueueParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    initialize(params: AudioPlayerDefaultParams): Promise<{ success: boolean }> {
+    syncQueue(params: SyncQueueParams): Promise<SyncQueueResult> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    changeAudioSource(params: AudioPlayerDefaultParams & { source: string }): Promise<void> {
+    getQueue(): Promise<GetQueueResult> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    changeMetadata(
-        params: AudioPlayerDefaultParams & {
-            friendlyTitle?: string;
-            artworkSource?: string;
-        },
-    ): Promise<void> {
+    addQueueItems(params: AddQueueItemsParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    updateMetadata(params: AudioPlayerDefaultParams): Promise<void> {
+    removeQueueItem(params: RemoveQueueItemParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    getDuration(params: AudioPlayerDefaultParams): Promise<{ duration: number }> {
+    moveQueueItem(params: MoveQueueItemParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    getCurrentTime(params: AudioPlayerDefaultParams): Promise<{ currentTime: number }> {
+    clearQueue(): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    play(params: AudioPlayerDefaultParams): Promise<void> {
+    play(): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    pause(params: AudioPlayerDefaultParams): Promise<void> {
+    pause(): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    seek(params: AudioPlayerDefaultParams & { timeInSeconds: number }): Promise<void> {
+    stop(): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    stop(params: AudioPlayerDefaultParams): Promise<void> {
+    seek(params: SeekParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    setVolume(params: AudioPlayerDefaultParams & { volume: number }): Promise<void> {
+    skipToNext(): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    setRate(params: AudioPlayerDefaultParams & { rate: number }): Promise<void> {
+    skipToPrevious(): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    isPlaying(params: AudioPlayerDefaultParams): Promise<{ isPlaying: boolean }> {
+    skipToIndex(params: SkipToIndexParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    destroy(params: AudioPlayerDefaultParams): Promise<void> {
+    setRate(params: SetRateParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    onAppGainsFocus(
-        params: AudioPlayerListenerParams,
-        callback: () => void,
-    ): Promise<AudioPlayerListenerResult> {
+    setVolume(params: SetVolumeParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    onAppLosesFocus(
-        params: AudioPlayerListenerParams,
-        callback: () => void,
-    ): Promise<AudioPlayerListenerResult> {
+    getState(): Promise<PlayerState> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    onAudioReady(
-        params: AudioPlayerListenerParams,
-        callback: () => void,
-    ): Promise<AudioPlayerListenerResult> {
+    setItemProgress(params: SetItemProgressParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    onAudioEnd(
-        params: AudioPlayerListenerParams,
-        callback: () => void,
-    ): Promise<AudioPlayerListenerResult> {
+    getItemProgress(params: GetItemProgressParams): Promise<ItemProgress> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    onPlaybackStatusChange(
-        params: AudioPlayerListenerParams,
-        callback: (result: { status: 'playing' | 'paused' | 'stopped' }) => void,
-    ): Promise<AudioPlayerListenerResult> {
+    setPlaybackOptions(params: SetPlaybackOptionsParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    onMetadataUpdate(
-        params: AudioPlayerListenerParams,
-        callback: (result: AudioPlayerMetadataUpdateListenerEvent) => void,
-    ): Promise<AudioPlayerListenerResult> {
+    getPlaybackOptions(): Promise<PlaybackOptions> {
+        throw this.unimplemented('Not implemented on web.');
+    }
+
+    setRepeatMode(): Promise<void> {
+        throw this.unimplemented('Not implemented on web.');
+    }
+
+    setShuffle(): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 }

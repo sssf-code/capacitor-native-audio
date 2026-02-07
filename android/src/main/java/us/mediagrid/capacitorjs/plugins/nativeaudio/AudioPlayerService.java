@@ -1,16 +1,17 @@
 package us.mediagrid.capacitorjs.plugins.nativeaudio;
 
 import android.app.PendingIntent;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Intent;
-import android.os.IBinder;
+import android.os.Build;
 import android.util.Log;
 import androidx.annotation.Nullable;
-import androidx.annotation.OptIn;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.Player;
-import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.session.DefaultMediaNotificationProvider;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
 
@@ -19,11 +20,14 @@ public class AudioPlayerService extends MediaSessionService {
     private static final String TAG = "AudioPlayerService";
     public static final String PLAYBACK_CHANNEL_ID = "playback_channel";
     private MediaSession mediaSession = null;
+    private QueuePlayer queuePlayer = null;
 
     @Override
     public void onCreate() {
         Log.i(TAG, "Service being created");
         super.onCreate();
+
+        createNotificationChannelIfNeeded();
 
         String packageName = getApplicationContext().getPackageName();
         Intent sessionActivityIntent = getPackageManager().getLaunchIntentForPackage(packageName);
@@ -46,10 +50,19 @@ public class AudioPlayerService extends MediaSessionService {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build();
         player.setPlayWhenReady(false);
+
+        queuePlayer = new QueuePlayer(this, player);
         mediaSession = new MediaSession.Builder(this, player)
-            .setCallback(new MediaSessionCallback(this))
+            .setCallback(new MediaSessionCallback(queuePlayer))
             .setSessionActivity(sessionActivityPendingIntent)
             .build();
+
+        DefaultMediaNotificationProvider provider = new DefaultMediaNotificationProvider(this);
+        int iconResId = queuePlayer.getResolvedNotificationSmallIconResId();
+        try {
+            provider.getClass().getMethod("setSmallIcon", int.class).invoke(provider, iconResId);
+        } catch (Exception ignored) {}
+        setMediaNotificationProvider(provider);
     }
 
     @Override
@@ -67,50 +80,36 @@ public class AudioPlayerService extends MediaSessionService {
     @Override
     public void onTaskRemoved(@Nullable Intent rootIntent) {
         Log.i(TAG, "Task removed");
-
-        AudioSources audioSources = getAudioSourcesFromMediaSession();
-
-        if (audioSources != null) {
-            Log.i(TAG, "Destroying all non-notification audio sources");
-            audioSources.destroyAllNonNotificationSources();
-        }
-
-        Player player = mediaSession.getPlayer();
-
-        // Make sure the service is not in foreground
-        if (player.getPlayWhenReady()) {
-            player.pause();
-        }
-
-        stopSelf();
+        super.onTaskRemoved(rootIntent);
     }
 
     @Override
     public void onDestroy() {
         Log.i(TAG, "Service being destroyed");
-
-        AudioSources audioSources = getAudioSourcesFromMediaSession();
-
-        if (audioSources != null) {
-            Log.i(TAG, "Destroying all non-notification audio sources");
-            audioSources.destroyAllNonNotificationSources();
+        if (mediaSession != null) {
+            mediaSession.getPlayer().release();
+            mediaSession.release();
+            mediaSession = null;
         }
-
-        mediaSession.getPlayer().release();
-        mediaSession.release();
-        mediaSession = null;
+        if (queuePlayer != null) {
+            try {
+                queuePlayer.release();
+            } catch (Exception ignored) {}
+        }
+        queuePlayer = null;
 
         super.onDestroy();
     }
 
-    @OptIn(markerClass = UnstableApi.class)
-    private AudioSources getAudioSourcesFromMediaSession() {
-        IBinder sourcesBinder = mediaSession.getSessionExtras().getBinder("audioSources");
-
-        if (sourcesBinder != null) {
-            return (AudioSources) sourcesBinder;
-        }
-
-        return null;
+    private void createNotificationChannelIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        NotificationChannel channel = new NotificationChannel(
+            PLAYBACK_CHANNEL_ID,
+            "Media playback",
+            NotificationManager.IMPORTANCE_LOW
+        );
+        nm.createNotificationChannel(channel);
     }
 }

@@ -1,377 +1,292 @@
-export interface AudioPlayerDefaultParams {
-    /**
-     * Any string to differentiate different audio files.
-     *
-     * @since 1.0.0
-     */
-    audioId: string;
-}
+import type { PluginListenerHandle } from '@capacitor/core';
 
-export interface AudioPlayerPrepareParams extends AudioPlayerDefaultParams {
+export type PlaybackStatus = 'playing' | 'paused' | 'stopped';
+
+export type RepeatMode = 'off' | 'one' | 'all';
+
+export interface QueueItem {
     /**
-     * A URI for the audio file to play
-     *
-     * @example A public web source: https://example.com/example.mp3
-     * @since 1.0.0
+     * Stable identifier used for reconciliation and per-item bookmarks/progress.
      */
-    audioSource: string;
+    id: string;
 
     /**
-     * The album title/name of the audio file to be used on the notification
-     *
-     * @since 2.1.0
+     * Remote URL or app asset path (e.g. `assets/chapter01.mp3`).
      */
-    albumTitle?: string;
+    src: string;
 
     /**
-     * The artist name of the audio file to be used on the notification
-     *
-     * @since 2.1.0
+     * Display title for OS notification/lockscreen.
      */
-    artistName?: string;
+    title: string;
 
     /**
-     * The title/name of the audio file to be used on the notification
-     *
-     * @since 1.0.0
+     * Optional artist name.
      */
-    friendlyTitle: string;
+    artist?: string;
 
     /**
-     * Whether to use this audio file for the notification.
-     * This is considered the primary audio to play.
-     *
-     * It must be created first and you may only have one at a time.
-     *
-     * @default false
-     * @since 1.0.0
+     * Optional album/podcast/book name.
      */
-    useForNotification: boolean;
+    album?: string;
 
     /**
-     * A URI for the album art image to display on the Android/iOS notification.
-     *
-     * Can also be an in-app source. Pulls from `android/app/src/assets/public` and `ios/App/App/public`.
-     * If using [Vite](https://vitejs.dev/guide/assets.html#the-public-directory),
-     * you would put the image in your `public` folder and the build process will copy to `dist`
-     * which in turn will be copied to the Android/iOS assets by Capacitor.
-     *
-     * A PNG is the best option with square dimensions. 1200 x 1200px is a good option.
-     *
-     * @example A public web source: https://example.com/artwork.png
-     * @example An in-app source: images/artwork.png
-     * @since 1.0.0
+     * Artwork URL or app asset path.
      */
-    artworkSource?: string;
+    artwork?: string;
 
     /**
-     * Is this audio for background music/audio.
-     *
-     * Should not be `true` when `useForNotification = true`.
-     *
-     * @default false
-     * @since 1.0.0
+     * Optional duration in seconds (streams may be unknown).
      */
-    isBackgroundMusic?: boolean;
+    duration?: number;
 
     /**
-     * Whether or not to loop other audio like background music
-     * while the primary audio (`useForNotification = true`) is playing.
-     *
-     * @default false
-     * @since 1.0.0
-     */
-    loop?: boolean;
-
-    /**
-     * Whether or not to show the seek backward button on the OS's notification.
-     * Only has affect when `useForNotification = true`.
-     *
-     * @default true
-     * @since 1.2.0
-     */
-    showSeekBackward?: boolean;
-
-    /**
-     * Whether or not to show the seek forward button on the OS's notification.
-     * Only has affect when `useForNotification = true`.
-     *
-     * @default true
-     * @since 1.2.0
-     */
-    showSeekForward?: boolean;
-
-    /**
-     * Time to seek backward in seconds on the OS's notification.
-     * Only has affect when `showSeekBackward = true`.
-     *
-     * @default 5
-     * @since 2.3.0
-     */
-    seekBackwardTime?: number;
-
-    /**
-     * Time to seek forward in seconds on the OS's notification.
-     * Only has affect when `showSeekForward = true`.
-     *
-     * @default 5
-     * @since 2.3.0
-     */
-    seekForwardTime?: number;
-
-    /**
-     * The URL to fetch metadata updates at the specified interval. Typically used for a radio stream.
-     * See the section on [Metadata Updates](#metadata-updates) for more info.
-     * Only has affect when `useForNotification = true`.
-     *
-     * @since 2.2.0
+     * Optional metadata update URL + interval (useful for streams/radio).
      */
     metadataUpdateUrl?: string;
-
-    /**
-     * The interval to fetch metadata updates in seconds.
-     *
-     * @default 15
-     * @since 2.2.0
-     */
     metadataUpdateInterval?: number;
+
+    /**
+     * Opaque app-defined data (not interpreted by native).
+     */
+    extras?: Record<string, any>;
 }
 
-export interface AudioPlayerListenerParams {
-    /**
-     * The `audioId` set when `create` was called.
-     *
-     * @since 1.0.0
-     */
-    audioId: string;
+export interface ItemProgress {
+    itemId: string;
+    positionSeconds: number;
+    durationSeconds?: number;
+    completed?: boolean;
+    updatedAtEpochMs: number;
 }
 
-export interface AudioPlayerListenerResult {
-    callbackId: string;
+export interface PlaybackOptions {
+    /**
+     * When user presses previous: if current position is above this threshold,
+     * seek to 0 instead of going to previous item.
+     *
+     * @default 7
+     */
+    previousThresholdSeconds: number;
+
+    /**
+     * OS skip buttons (seek +/- fixed seconds) configuration.
+     *
+     * @default 10
+     */
+    skipForwardSeconds: number;
+
+    /**
+     * OS skip buttons (seek +/- fixed seconds) configuration.
+     *
+     * @default 10
+     */
+    skipBackwardSeconds: number;
+
+    /**
+     * Whether to expose next/previous track controls in OS UIs when possible.
+     *
+     * @default true
+     */
+    enableNextPrev: boolean;
+
+    /**
+     * Whether to expose scrubbing (seek-to) controls in OS UIs when possible.
+     *
+     * @default true
+     */
+    enableSeekTo: boolean;
+
+    /**
+     * Whether to expose stop controls in OS UIs when possible.
+     *
+     * @default true
+     */
+    enableStop: boolean;
+
+    /**
+     * Android-only: override the drawable name for the notification small icon.
+     * (No extension, no `R.drawable.` prefix.)
+     */
+    androidNotificationSmallIcon?: string;
 }
 
-export interface AudioPlayerMetadataUpdateListenerEvent {
+export interface PlayerState {
     /**
-     * The album title
-     *
-     * @since 2.2.0
+     * Monotonic revision that increments on any state change.
      */
-    album_title: string;
+    stateRevision: number;
 
     /**
-     * The artist name
-     *
-     * @since 2.2.0
+     * Monotonic revision that increments on any queue topology change.
      */
-    artist_name: string;
+    queueRevision: number;
 
+    status: PlaybackStatus;
+    currentIndex: number;
+    currentItemId?: string;
+    position: number;
+    duration?: number;
+    rate: number;
     /**
-     * The song title
-     *
-     * @since 2.2.0
+     * Volume in 0..100.
      */
-    song_title: string;
+    volume: number;
+    repeatMode: RepeatMode;
+    shuffle: boolean;
+}
 
+export interface SetQueueParams {
+    items: QueueItem[];
+    startIndex?: number;
+    startPositionSeconds?: number;
+    autoplay?: boolean;
+}
+
+export type SyncQueueMode = 'replace' | 'patch';
+
+export interface SyncQueueParams extends SetQueueParams {
+    mode: SyncQueueMode;
+    currentItemId?: string;
+    expectedQueueRevision?: number;
+    force?: boolean;
+}
+
+export interface AddQueueItemsParams {
+    items: QueueItem[];
+    atIndex?: number;
+}
+
+export interface RemoveQueueItemParams {
+    itemId: string;
+}
+
+export interface MoveQueueItemParams {
+    fromIndex: number;
+    toIndex: number;
+}
+
+export interface SetVolumeParams {
     /**
-     * A URI for the album art image to display on the Android/iOS notification.
-     *
-     * @since 2.2.0
+     * Volume in 0..100.
      */
-    artwork_source: string;
+    volume: number;
+}
+
+export interface SetRateParams {
+    /**
+     * Playback speed (e.g. `1.0` normal).
+     */
+    rate: number;
+}
+
+export interface SeekParams {
+    positionSeconds: number;
+}
+
+export interface SkipToIndexParams {
+    index: number;
+    positionSeconds?: number;
+}
+
+export interface SetItemProgressParams {
+    itemId: string;
+    positionSeconds: number;
+    durationSeconds?: number;
+    completed?: boolean;
+}
+
+export interface GetItemProgressParams {
+    itemId: string;
+}
+
+export interface SetPlaybackOptionsParams extends Partial<PlaybackOptions> {}
+
+export interface SetRepeatModeParams {
+    repeatMode: RepeatMode;
+}
+
+export interface SetShuffleParams {
+    shuffle: boolean;
+}
+
+export interface GetQueueResult {
+    queueRevision: number;
+    items: QueueItem[];
+    currentIndex: number;
+    currentItemId?: string;
+}
+
+export interface SyncQueueResult {
+    queueRevision: number;
+}
+
+export interface TrackChangeEvent {
+    queueRevision: number;
+    currentIndex: number;
+    item: QueueItem;
+}
+
+export interface QueueChangeEvent extends GetQueueResult {}
+
+export interface MetadataChangeEvent {
+    stateRevision: number;
+    itemId: string;
+    metadata: Partial<QueueItem>;
 }
 
 export interface AudioPlayerPlugin {
-    /**
-     * Create an audio source to be played.
-     *
-     * @since 1.0.0
-     */
-    create(params: AudioPlayerPrepareParams): Promise<{ success: boolean }>;
+    // Queue
+    setQueue(params: SetQueueParams): Promise<void>;
+    syncQueue(params: SyncQueueParams): Promise<SyncQueueResult>;
+    getQueue(): Promise<GetQueueResult>;
+    addQueueItems(params: AddQueueItemsParams): Promise<void>;
+    removeQueueItem(params: RemoveQueueItemParams): Promise<void>;
+    moveQueueItem(params: MoveQueueItemParams): Promise<void>;
+    clearQueue(): Promise<void>;
 
-    /**
-     * Initialize the audio source. Prepares the audio to be played, buffers and such.
-     *
-     * Should be called after callbacks are registered (e.g. `onAudioReady`).
-     *
-     * @since 1.0.0
-     */
-    initialize(params: AudioPlayerDefaultParams): Promise<{ success: boolean }>;
+    // Playback
+    play(): Promise<void>;
+    pause(): Promise<void>;
+    stop(): Promise<void>;
+    seek(params: SeekParams): Promise<void>;
+    skipToNext(): Promise<void>;
+    skipToPrevious(): Promise<void>;
+    skipToIndex(params: SkipToIndexParams): Promise<void>;
+    setRate(params: SetRateParams): Promise<void>;
+    setVolume(params: SetVolumeParams): Promise<void>;
 
-    /**
-     * Change the audio source on an existing audio source (`audioId`).
-     *
-     * This is useful for changing background music while the primary audio is playing
-     * or changing the primary audio before it is playing to accommodate different durations
-     * that a user can choose from.
-     *
-     * @since 1.0.0
-     */
-    changeAudioSource(params: AudioPlayerDefaultParams & { source: string }): Promise<void>;
+    // State
+    getState(): Promise<PlayerState>;
 
-    /**
-     * Change the associated metadata of an existing audio source
-     *
-     * @since 1.1.0
-     */
-    changeMetadata(
-        params: AudioPlayerDefaultParams & {
-            albumTitle?: string;
-            artistName?: string;
-            friendlyTitle?: string;
-            artworkSource?: string;
-        },
-    ): Promise<void>;
+    // Progress / bookmarks
+    setItemProgress(params: SetItemProgressParams): Promise<void>;
+    getItemProgress(params: GetItemProgressParams): Promise<ItemProgress>;
 
-    /**
-     * Update metadata from Update URL
-     *
-     * This runs async on the native side. Use the `onMetadataUpdate` listener to get the updated metadata.
-     *
-     * @since 2.2.0
-     */
-    updateMetadata(params: AudioPlayerDefaultParams): Promise<void>;
+    // Options
+    setPlaybackOptions(params: SetPlaybackOptionsParams): Promise<void>;
+    getPlaybackOptions(): Promise<PlaybackOptions>;
 
-    /**
-     * Get the duration of the audio source.
-     *
-     * Should be called once the audio is ready (`onAudioReady`).
-     *
-     * @since 1.0.0
-     */
-    getDuration(params: AudioPlayerDefaultParams): Promise<{ duration: number }>;
+    // Playback modes
+    setRepeatMode(params: SetRepeatModeParams): Promise<void>;
+    setShuffle(params: SetShuffleParams): Promise<void>;
 
-    /**
-     * Get the current time of the audio source being played.
-     *
-     * @since 1.0.0
-     */
-    getCurrentTime(params: AudioPlayerDefaultParams): Promise<{ currentTime: number }>;
-
-    /**
-     * Play the audio source.
-     *
-     * @since 1.0.0
-     */
-    play(params: AudioPlayerDefaultParams): Promise<void>;
-
-    /**
-     * Pause the audio source.
-     *
-     * @since 1.0.0
-     */
-    pause(params: AudioPlayerDefaultParams): Promise<void>;
-
-    /**
-     * Seek the audio source to a specific time.
-     *
-     * @since 1.0.0
-     */
-    seek(params: AudioPlayerDefaultParams & { timeInSeconds: number }): Promise<void>;
-
-    /**
-     * Stop playing the audio source and reset the current time to zero.
-     *
-     * @since 1.0.0
-     */
-    stop(params: AudioPlayerDefaultParams): Promise<void>;
-
-    /**
-     * Set the volume of the audio source. Should be a decimal less than or equal to `1.00`.
-     *
-     * This is useful for background music.
-     *
-     * @since 1.0.0
-     */
-    setVolume(params: AudioPlayerDefaultParams & { volume: number }): Promise<void>;
-
-    /**
-     * Set the rate for the audio source to be played at.
-     * Should be a decimal. An example being `1` is normal speed, `0.5` being half the speed and `1.5` being 1.5 times faster.
-     *
-     * @since 1.0.0
-     */
-    setRate(params: AudioPlayerDefaultParams & { rate: number }): Promise<void>;
-
-    /**
-     * Wether or not the audio source is currently playing.
-     *
-     * @since 1.0.0
-     */
-    isPlaying(params: AudioPlayerDefaultParams): Promise<{ isPlaying: boolean }>;
-
-    /**
-     * Destroy all resources for the audio source.
-     * The audio source with `useForNotification = true` must be destroyed last.
-     *
-     * @since 1.0.0
-     */
-    destroy(params: AudioPlayerDefaultParams): Promise<void>;
-
-    /**
-     * Register a callback for when the app comes to the foreground.
-     *
-     * @since 1.0.0
-     */
-    onAppGainsFocus(
-        params: AudioPlayerListenerParams,
-        callback: () => void,
-    ): Promise<AudioPlayerListenerResult>;
-
-    /**
-     * Registers a callback from when the app goes to the background.
-     *
-     * @since 1.0.0
-     */
-    onAppLosesFocus(
-        params: AudioPlayerListenerParams,
-        callback: () => void,
-    ): Promise<AudioPlayerListenerResult>;
-
-    /**
-     * Registers a callback for when the audio source is ready to be played.
-     *
-     * @since 1.0.0
-     */
-    onAudioReady(
-        params: AudioPlayerListenerParams,
-        callback: () => void,
-    ): Promise<AudioPlayerListenerResult>;
-
-    /**
-     * Registers a callback for when the audio source has ended (reached the end of the audio).
-     *
-     * @since 1.0.0
-     */
-    onAudioEnd(
-        params: AudioPlayerListenerParams,
-        callback: () => void,
-    ): Promise<AudioPlayerListenerResult>;
-
-    /**
-     * Registers a callback for when state of playback for the audio source has changed by external controls.
-     * This should be used to update your UI when the notification/external controls are used to control the playback.
-     *
-     * On Android, this also gets fired when your app changes the state (e.g. by calling `play`, `pause` or `stop`)
-     * due to a limitation of not knowing where the state change came from, either the app or the `MediaSession` (external controls).
-     *
-     * It may be fixed in the future for Android if a solution is found so don't rely on it when your app itself changes the state.
-     *
-     * @since 1.0.0
-     */
-    onPlaybackStatusChange(
-        params: AudioPlayerListenerParams,
-        callback: (result: { status: 'playing' | 'paused' | 'stopped' }) => void,
-    ): Promise<AudioPlayerListenerResult>;
-
-    /**
-     * Registers a callback for when metadata updates from a URL.
-     *
-     * It will return all data from the URL response, not just the required data. So you could have the metadata endpoint return other data that you may need.
-     *
-     * @since 2.2.0
-     */
-    onMetadataUpdate(
-        params: AudioPlayerListenerParams,
-        callback: (result: AudioPlayerMetadataUpdateListenerEvent) => void,
-    ): Promise<AudioPlayerListenerResult>;
+    // Events (standard Capacitor listeners)
+    addListener(
+        eventName: 'stateChange',
+        listenerFunc: (state: PlayerState) => void,
+    ): Promise<PluginListenerHandle>;
+    addListener(
+        eventName: 'trackChange',
+        listenerFunc: (event: TrackChangeEvent) => void,
+    ): Promise<PluginListenerHandle>;
+    addListener(
+        eventName: 'queueChange',
+        listenerFunc: (event: QueueChangeEvent) => void,
+    ): Promise<PluginListenerHandle>;
+    addListener(
+        eventName: 'metadataChange',
+        listenerFunc: (event: MetadataChangeEvent) => void,
+    ): Promise<PluginListenerHandle>;
+    removeAllListeners(): Promise<void>;
 }

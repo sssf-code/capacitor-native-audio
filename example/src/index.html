@@ -12,53 +12,73 @@
     </head>
     <body class="container px-4 mx-auto font-sans bg-slate-100">
         <main>
-            <h1 class="text-2xl font-medium text-center mt-14">Example Using the Audio Plugin</h1>
+            <h1 class="text-2xl font-medium text-center mt-14">Native Queue Player Example</h1>
             <div class="mt-4 text-center">
-                <div>
-                    <button id="playButton" class="btn bg-green-600 text-white">Play</button>
-                    <button id="pauseButton" class="btn bg-yellow-600 text-white">Pause</button>
-                    <button id="stopButton" class="btn bg-blue-600 text-white">Stop</button>
+                <div class="flex flex-col items-center space-y-2">
+                    <div class="flex flex-wrap gap-2 justify-center">
+                        <button id="loadAudiobookQueue" class="btn bg-slate-800 text-white">
+                            Load Audiobook Queue
+                        </button>
+                        <button id="loadPodcastQueue" class="btn bg-slate-800 text-white">
+                            Load Podcast Queue
+                        </button>
+                        <button id="patchSyncButton" class="btn bg-slate-800 text-white">
+                            Patch Sync
+                        </button>
+                        <button id="patchSyncMismatchButton" class="btn bg-slate-800 text-white">
+                            Patch Sync (mismatch)
+                        </button>
+                        <button id="resyncButton" class="btn bg-slate-600 text-white">Resync</button>
+                        <button id="clearQueueButton" class="btn bg-red-600 text-white">
+                            Clear Queue
+                        </button>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 justify-center mt-2">
+                        <button id="prevButton" class="btn bg-slate-300 text-slate-900">Prev</button>
+                        <button id="playButton" class="btn bg-green-600 text-white">Play</button>
+                        <button id="pauseButton" class="btn bg-yellow-600 text-white">Pause</button>
+                        <button id="stopButton" class="btn bg-blue-600 text-white">Stop</button>
+                        <button id="nextButton" class="btn bg-slate-300 text-slate-900">Next</button>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 justify-center mt-2">
+                        <button id="addItemButton" class="btn btn-sm bg-blue-300 text-slate-900">
+                            Add Item (to end)
+                        </button>
+                        <button id="removeCurrentButton" class="btn btn-sm bg-blue-300 text-slate-900">
+                            Remove Current Item
+                        </button>
+                        <button id="moveLastToFirstButton" class="btn btn-sm bg-blue-300 text-slate-900">
+                            Move Last → First
+                        </button>
+                        <button id="repeatButton" class="btn btn-sm bg-blue-300 text-slate-900">
+                            Repeat: off
+                        </button>
+                        <button id="shuffleButton" class="btn btn-sm bg-blue-300 text-slate-900">
+                            Shuffle: off
+                        </button>
+                    </div>
                 </div>
-                <div class="mt-4 flex flex-col space-y-1">
-                    <button
-                        id="changeMetadataButton"
-                        class="btn btn-sm bg-blue-300 text-bg-blue-800"
-                    >
-                        Change Metadata
-                    </button>
-                    <button
-                        id="updateMetadataButton"
-                        class="btn btn-sm bg-blue-300 text-bg-blue-800"
-                    >
-                        Update Metadata (from URL)
-                    </button>
+
+                <div class="mt-6 text-left max-w-xl mx-auto bg-white rounded-xl shadow p-4">
+                    <p><b>Status</b>: <span id="status">stopped</span></p>
+                    <p><b>stateRevision</b>: <span id="stateRevision">0</span></p>
+                    <p><b>queueRevision</b>: <span id="queueRevision">0</span></p>
+                    <p><b>currentIndex</b>: <span id="currentIndex">0</span></p>
+                    <p><b>currentItemId</b>: <span id="currentItemId">-</span></p>
+                    <p><b>position</b>: <span id="position">0</span></p>
+                    <p><b>duration</b>: <span id="duration">-</span></p>
+                    <p><b>rate</b>: <span id="rate">1</span></p>
+                    <p><b>volume</b>: <span id="volume">100</span></p>
                 </div>
-                <p class="mt-4">Status: <span id="status">stopped</span></p>
-                <p>Duration: <span id="duration">0</span></p>
-                <p>Current time: <span id="currentTime">0</span></p>
+
                 <p id="error" class="text-red-500 mt-4"></p>
-                <button id="cleanupButton" class="btn bg-red-600 text-white">Cleanup</button>
             </div>
         </main>
-        <footer class="text-xs mt-4 text-center">
+        <footer class="text-xs mt-4 text-center text-slate-600">
             <div>
-                <i>Audio sources</i>
-                <ul>
-                    <li>
-                        <a
-                            href="https://freemusicarchive.org/music/Various_Artists/Party_Fun_With_Recorders_-_Volume_One/csr004-13-partyfunwithrecorders/"
-                        >
-                            The News Update
-                        </a>
-                    </li>
-                    <li>
-                        <a
-                            href="https://freemusicarchive.org/music/Komiku/Poupis_incredible_adventures_/Komiku_-_Poupis_incredible_adventures__-_12_Bicycle/"
-                        >
-                            Bicycle
-                        </a>
-                    </li>
-                </ul>
+                Events may not deliver while backgrounded; use <b>Resync</b> (or app resume) to reconcile.
             </div>
         </footer>
         <script src="./js/example.ts" type="module"></script>
