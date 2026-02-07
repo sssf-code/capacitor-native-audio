@@ -33,6 +33,8 @@ public class AudioPlayerPlugin extends Plugin {
     private String lastMetadataFingerprintByCurrentItem = null;
     private String lastMetadataItemId = null;
     private long lastStateRevision = 0;
+    private long lastQueueRevision = 0;
+    private String lastCurrentItemId = null;
 
     @Override
     public void load() {
@@ -44,6 +46,28 @@ public class AudioPlayerPlugin extends Plugin {
     protected void handleOnDestroy() {
         cleanup();
         super.handleOnDestroy();
+    }
+
+    private interface ControllerTask {
+        void run(MediaController controller) throws Exception;
+    }
+
+    private void withController(PluginCall call, String errorPrefix, ControllerTask task) {
+        ensureController(call);
+        final ListenableFuture<MediaController> cf = controllerFuture;
+        if (cf == null) {
+            call.reject("Media controller not initialized.");
+            return;
+        }
+        cf.addListener(() -> {
+            try {
+                MediaController c = cf.get();
+                task.run(c);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject(errorPrefix, e);
+            }
+        }, MoreExecutors.directExecutor());
     }
 
     // MARK: - Queue
@@ -78,8 +102,13 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void removeQueueItem(PluginCall call) {
+        String itemId = call.getString("itemId");
+        if (itemId == null || itemId.trim().isEmpty()) {
+            call.reject("Missing required parameter 'itemId'.");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("itemId", call.getString("itemId"));
+        obj.put("itemId", itemId);
         sendCustom(call, QueuePlayer.CMD_REMOVE_ITEM, obj, null);
     }
 
@@ -97,48 +126,36 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void play(PluginCall call) {
-        ensureController(call);
-        if (controller == null) return;
-        controller.play();
-        call.resolve();
+        withController(call, "Failed to play.", MediaController::play);
     }
 
     @PluginMethod
     public void pause(PluginCall call) {
-        ensureController(call);
-        if (controller == null) return;
-        controller.pause();
-        call.resolve();
+        withController(call, "Failed to pause.", MediaController::pause);
     }
 
     @PluginMethod
     public void stop(PluginCall call) {
-        ensureController(call);
-        if (controller == null) return;
-        controller.stop();
-        controller.seekTo(0);
-        call.resolve();
+        withController(call, "Failed to stop.", c -> {
+            c.stop();
+            c.seekTo(0);
+        });
     }
 
     @PluginMethod
     public void seek(PluginCall call) {
-        ensureController(call);
-        if (controller == null) return;
         Double pos = call.getDouble("positionSeconds");
         if (pos == null) {
             call.reject("positionSeconds is required.");
             return;
         }
-        controller.seekTo((long) (Math.max(0, pos) * 1000));
-        call.resolve();
+        final long ms = (long) (Math.max(0, pos) * 1000);
+        withController(call, "Failed to seek.", c -> c.seekTo(ms));
     }
 
     @PluginMethod
     public void skipToNext(PluginCall call) {
-        ensureController(call);
-        if (controller == null) return;
-        controller.seekToNextMediaItem();
-        call.resolve();
+        withController(call, "Failed to skip to next.", MediaController::seekToNextMediaItem);
     }
 
     @PluginMethod
@@ -153,15 +170,25 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void setRate(PluginCall call) {
+        Double rate = call.getDouble("rate");
+        if (rate == null) {
+            call.reject("Missing required parameter 'rate'.");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("rate", call.getDouble("rate"));
+        obj.put("rate", rate);
         sendCustom(call, QueuePlayer.CMD_SET_RATE, obj, null);
     }
 
     @PluginMethod
     public void setVolume(PluginCall call) {
+        Double volume = call.getDouble("volume");
+        if (volume == null) {
+            call.reject("Missing required parameter 'volume'.");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("volume", call.getDouble("volume"));
+        obj.put("volume", volume);
         sendCustom(call, QueuePlayer.CMD_SET_VOLUME, obj, null);
     }
 
@@ -184,8 +211,13 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void getItemProgress(PluginCall call) {
+        String itemId = call.getString("itemId");
+        if (itemId == null || itemId.trim().isEmpty()) {
+            call.reject("Missing required parameter 'itemId'.");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("itemId", call.getString("itemId"));
+        obj.put("itemId", itemId);
         sendCustom(call, QueuePlayer.CMD_GET_PROGRESS, obj, result -> {
             String json = result.extras != null ? result.extras.getString("progress") : null;
             call.resolve(json != null ? new JSObject(json) : new JSObject());
@@ -201,8 +233,13 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void setRepeatMode(PluginCall call) {
+        String repeatMode = call.getString("repeatMode");
+        if (repeatMode == null || repeatMode.trim().isEmpty()) {
+            call.reject("Missing required parameter 'repeatMode'.");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("repeatMode", call.getString("repeatMode"));
+        obj.put("repeatMode", repeatMode);
         sendCustom(call, QueuePlayer.CMD_SET_REPEAT_MODE, obj, null);
     }
 
@@ -315,31 +352,15 @@ public class AudioPlayerPlugin extends Plugin {
         emitScheduled = true;
         mainHandler.postDelayed(() -> {
             emitScheduled = false;
-            emitStateChange();
-            emitQueueChange();
-            emitTrackChange();
-            emitMetadataChange();
+            emitAll();
         }, 150);
     }
 
-    private void emitStateChange() {
-        sendCustomCommandInternal(QueuePlayer.CMD_GET_STATE, "state", "stateChange");
+    private interface SnapshotHandler {
+        void handle(String json) throws Exception;
     }
 
-    private void emitQueueChange() {
-        sendCustomCommandInternal(QueuePlayer.CMD_GET_QUEUE, "queue", "queueChange");
-    }
-
-    private void emitTrackChange() {
-        sendCustomCommandInternal(QueuePlayer.CMD_GET_QUEUE, "queue", "trackChange");
-    }
-
-    private void emitMetadataChange() {
-        // Derive metadataChange by diffing current item metadata from queue snapshot.
-        sendCustomCommandInternal(QueuePlayer.CMD_GET_QUEUE, "queue", "metadataChange");
-    }
-
-    private void sendCustomCommandInternal(String action, String resultKey, String eventName) {
+    private void fetchSnapshot(String action, String resultKey, SnapshotHandler handler) {
         final ListenableFuture<MediaController> cf = controllerFuture;
         if (cf == null) return;
         cf.addListener(() -> {
@@ -353,89 +374,122 @@ public class AudioPlayerPlugin extends Plugin {
                         SessionResult result = future.get();
                         String json = result.extras != null ? result.extras.getString(resultKey) : null;
                         if (json == null) return;
-
-                        if ("trackChange".equals(eventName)) {
-                            JSObject queueObj = new JSObject(json);
-                            int idx = queueObj.getInteger("currentIndex", 0);
-                            Object itemsObj = queueObj.get("items");
-                            if (!(itemsObj instanceof org.json.JSONArray)) return;
-                            org.json.JSONArray arr = (org.json.JSONArray) itemsObj;
-                            if (idx < 0 || idx >= arr.length()) return;
-                            JSObject item = new JSObject(arr.getJSONObject(idx).toString());
-                            JSObject payloadObj = new JSObject();
-                            long queueRevision = queueObj.has("queueRevision") ? queueObj.getLong("queueRevision") : 0;
-                            payloadObj.put("queueRevision", queueRevision);
-                            payloadObj.put("currentIndex", idx);
-                            payloadObj.put("item", item);
-                            notifyListeners("trackChange", payloadObj);
-                            return;
-                        }
-
-                        if ("stateChange".equals(eventName)) {
-                            try {
-                                JSObject stateObj = new JSObject(json);
-                                Object sr = stateObj.get("stateRevision");
-                                if (sr instanceof Number) {
-                                    lastStateRevision = ((Number) sr).longValue();
-                                }
-                                notifyListeners("stateChange", stateObj);
-                            } catch (Exception ignored) {}
-                            return;
-                        }
-
-                        if ("metadataChange".equals(eventName)) {
-                            JSObject queueObj = new JSObject(json);
-                            int idx = queueObj.getInteger("currentIndex", 0);
-                            Object itemsObj = queueObj.get("items");
-                            if (!(itemsObj instanceof org.json.JSONArray)) return;
-                            org.json.JSONArray arr = (org.json.JSONArray) itemsObj;
-                            if (idx < 0 || idx >= arr.length()) return;
-                            JSObject item = new JSObject(arr.getJSONObject(idx).toString());
-                            String itemId = item.getString("id");
-                            if (itemId == null) return;
-                            String title = item.getString("title");
-                            String artist = item.getString("artist");
-                            String album = item.getString("album");
-                            String artwork = item.getString("artwork");
-                            String fp = String.valueOf(title) + "|" + String.valueOf(artist) + "|" + String.valueOf(album) + "|" + String.valueOf(artwork);
-
-                            boolean changed = false;
-                            if (!itemId.equals(lastMetadataItemId)) {
-                                lastMetadataItemId = itemId;
-                                lastMetadataFingerprintByCurrentItem = fp;
-                                return;
-                            }
-                            if (lastMetadataFingerprintByCurrentItem == null || !lastMetadataFingerprintByCurrentItem.equals(fp)) {
-                                lastMetadataFingerprintByCurrentItem = fp;
-                                changed = true;
-                            }
-                            if (!changed) return;
-
-                            JSObject metadata = new JSObject();
-                            if (title != null) metadata.put("title", title);
-                            if (artist != null) metadata.put("artist", artist);
-                            if (album != null) metadata.put("album", album);
-                            if (artwork != null) metadata.put("artwork", artwork);
-
-                            JSObject payloadObj = new JSObject();
-                            payloadObj.put("stateRevision", lastStateRevision);
-                            payloadObj.put("itemId", itemId);
-                            payloadObj.put("metadata", metadata);
-                            notifyListeners("metadataChange", payloadObj);
-                            return;
-                        }
-
-                        notifyListeners(eventName, new JSObject(json));
+                        handler.handle(json);
                     } catch (Exception ignored) {}
                 }, MoreExecutors.directExecutor());
             } catch (Exception ignored) {}
         }, MoreExecutors.directExecutor());
     }
 
+    private void emitAll() {
+        // First fetch state; if stateRevision hasn't changed, skip everything else.
+        fetchSnapshot(QueuePlayer.CMD_GET_STATE, "state", stateJson -> {
+            JSObject stateObj;
+            try {
+                stateObj = new JSObject(stateJson);
+            } catch (Exception e) {
+                return;
+            }
+
+            Object srAny = stateObj.get("stateRevision");
+            long stateRevision = (srAny instanceof Number) ? ((Number) srAny).longValue() : 0;
+            if (stateRevision != 0 && stateRevision == lastStateRevision) {
+                return;
+            }
+            lastStateRevision = stateRevision;
+            notifyListeners("stateChange", stateObj);
+
+            // Now fetch queue once and derive queue/track/metadata events from it.
+            fetchSnapshot(QueuePlayer.CMD_GET_QUEUE, "queue", queueJson -> {
+                JSObject queueObj;
+                try {
+                    queueObj = new JSObject(queueJson);
+                } catch (Exception e) {
+                    return;
+                }
+
+                long queueRevision = queueObj.has("queueRevision") ? queueObj.getLong("queueRevision") : 0;
+                if (!(queueRevision != 0 && queueRevision == lastQueueRevision)) {
+                    lastQueueRevision = queueRevision;
+                    notifyListeners("queueChange", queueObj);
+                }
+
+                int idx = queueObj.getInteger("currentIndex", 0);
+                Object itemsObj = queueObj.get("items");
+                if (!(itemsObj instanceof org.json.JSONArray)) return;
+                org.json.JSONArray arr = (org.json.JSONArray) itemsObj;
+                if (idx < 0 || idx >= arr.length()) return;
+
+                JSObject item = new JSObject(arr.getJSONObject(idx).toString());
+                String itemId = item.getString("id");
+
+                boolean sameItem =
+                    (itemId == null && lastCurrentItemId == null) ||
+                        (itemId != null && itemId.equals(lastCurrentItemId));
+
+                if (!sameItem) {
+                    lastCurrentItemId = itemId;
+                    // Reset metadata tracking on track changes.
+                    lastMetadataItemId = itemId;
+                    lastMetadataFingerprintByCurrentItem = null;
+
+                    JSObject payloadObj = new JSObject();
+                    payloadObj.put("queueRevision", queueRevision);
+                    payloadObj.put("currentIndex", idx);
+                    payloadObj.put("item", item);
+                    notifyListeners("trackChange", payloadObj);
+                    return;
+                }
+
+                // Derive metadataChange by diffing current item metadata from queue snapshot.
+                if (itemId == null) return;
+                String title = item.getString("title");
+                String artist = item.getString("artist");
+                String album = item.getString("album");
+                String artwork = item.getString("artwork");
+                String fp =
+                    String.valueOf(title) +
+                        "|" +
+                        String.valueOf(artist) +
+                        "|" +
+                        String.valueOf(album) +
+                        "|" +
+                        String.valueOf(artwork);
+
+                if (!itemId.equals(lastMetadataItemId)) {
+                    lastMetadataItemId = itemId;
+                    lastMetadataFingerprintByCurrentItem = fp;
+                    return;
+                }
+                if (lastMetadataFingerprintByCurrentItem != null && lastMetadataFingerprintByCurrentItem.equals(fp)) {
+                    return;
+                }
+                lastMetadataFingerprintByCurrentItem = fp;
+
+                JSObject metadata = new JSObject();
+                if (title != null) metadata.put("title", title);
+                if (artist != null) metadata.put("artist", artist);
+                if (album != null) metadata.put("album", album);
+                if (artwork != null) metadata.put("artwork", artwork);
+
+                JSObject payloadObj = new JSObject();
+                payloadObj.put("stateRevision", stateRevision);
+                payloadObj.put("itemId", itemId);
+                payloadObj.put("metadata", metadata);
+                notifyListeners("metadataChange", payloadObj);
+            });
+        });
+    }
+
     private void cleanup() {
         // Cancel any pending emit callbacks.
         mainHandler.removeCallbacksAndMessages(null);
         emitScheduled = false;
+        lastStateRevision = 0;
+        lastQueueRevision = 0;
+        lastCurrentItemId = null;
+        lastMetadataItemId = null;
+        lastMetadataFingerprintByCurrentItem = null;
 
         // Release controller (best-effort).
         if (controller != null) {

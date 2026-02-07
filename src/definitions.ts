@@ -23,33 +23,33 @@ export interface QueueItem {
     /**
      * Optional artist name.
      */
-    artist?: string;
+    artist?: string | undefined;
 
     /**
      * Optional album/podcast/book name.
      */
-    album?: string;
+    album?: string | undefined;
 
     /**
      * Artwork URL or app asset path.
      */
-    artwork?: string;
+    artwork?: string | undefined;
 
     /**
      * Optional duration in seconds (streams may be unknown).
      */
-    duration?: number;
+    duration?: number | undefined;
 
     /**
      * Optional metadata update URL + interval (useful for streams/radio).
      */
-    metadataUpdateUrl?: string;
-    metadataUpdateInterval?: number;
+    metadataUpdateUrl?: string | undefined;
+    metadataUpdateInterval?: number | undefined;
 
     /**
      * Opaque app-defined data (not interpreted by native).
      */
-    extras?: Record<string, any>;
+    extras?: Record<string, any> | undefined;
 }
 
 export interface ItemProgress {
@@ -138,9 +138,9 @@ export interface PlayerState {
 
 export interface SetQueueParams {
     items: QueueItem[];
-    startIndex?: number;
-    startPositionSeconds?: number;
-    autoplay?: boolean;
+    startIndex?: number | undefined;
+    startPositionSeconds?: number | undefined;
+    autoplay?: boolean | undefined;
 }
 
 export type SyncQueueMode = 'replace' | 'patch';
