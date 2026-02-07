@@ -35,7 +35,13 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
 
     override public func load() {
         super.load()
+        // If the plugin is reloaded, ensure we tear down the old instance cleanly.
+        queuePlayer?.release()
         queuePlayer = NativeQueuePlayer(plugin: self)
+    }
+
+    deinit {
+        queuePlayer?.release()
     }
 
     // MARK: - Queue
