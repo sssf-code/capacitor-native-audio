@@ -1,0 +1,1309 @@
+{
+  "api": {
+    "name": "AudioPlayerPlugin",
+    "slug": "audioplayerplugin",
+    "docs": "",
+    "tags": [],
+    "methods": [
+      {
+        "name": "setQueue",
+        "signature": "(params: SetQueueParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "SetQueueParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "SetQueueParams"
+        ],
+        "slug": "setqueue"
+      },
+      {
+        "name": "syncQueue",
+        "signature": "(params: SyncQueueParams) => Promise<SyncQueueResult>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "SyncQueueParams"
+          }
+        ],
+        "returns": "Promise<SyncQueueResult>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "SyncQueueResult",
+          "SyncQueueParams"
+        ],
+        "slug": "syncqueue"
+      },
+      {
+        "name": "getQueue",
+        "signature": "() => Promise<GetQueueResult>",
+        "parameters": [],
+        "returns": "Promise<GetQueueResult>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "GetQueueResult"
+        ],
+        "slug": "getqueue"
+      },
+      {
+        "name": "addQueueItems",
+        "signature": "(params: AddQueueItemsParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "AddQueueItemsParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "AddQueueItemsParams"
+        ],
+        "slug": "addqueueitems"
+      },
+      {
+        "name": "removeQueueItem",
+        "signature": "(params: RemoveQueueItemParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "RemoveQueueItemParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "RemoveQueueItemParams"
+        ],
+        "slug": "removequeueitem"
+      },
+      {
+        "name": "moveQueueItem",
+        "signature": "(params: MoveQueueItemParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "MoveQueueItemParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "MoveQueueItemParams"
+        ],
+        "slug": "movequeueitem"
+      },
+      {
+        "name": "clearQueue",
+        "signature": "() => Promise<void>",
+        "parameters": [],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "clearqueue"
+      },
+      {
+        "name": "play",
+        "signature": "() => Promise<void>",
+        "parameters": [],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "play"
+      },
+      {
+        "name": "pause",
+        "signature": "() => Promise<void>",
+        "parameters": [],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "pause"
+      },
+      {
+        "name": "stop",
+        "signature": "() => Promise<void>",
+        "parameters": [],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "stop"
+      },
+      {
+        "name": "seek",
+        "signature": "(params: SeekParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "SeekParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "SeekParams"
+        ],
+        "slug": "seek"
+      },
+      {
+        "name": "skipToNext",
+        "signature": "() => Promise<void>",
+        "parameters": [],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "skiptonext"
+      },
+      {
+        "name": "skipToPrevious",
+        "signature": "() => Promise<void>",
+        "parameters": [],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "skiptoprevious"
+      },
+      {
+        "name": "skipToIndex",
+        "signature": "(params: SkipToIndexParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "SkipToIndexParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "SkipToIndexParams"
+        ],
+        "slug": "skiptoindex"
+      },
+      {
+        "name": "setRate",
+        "signature": "(params: SetRateParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "SetRateParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "SetRateParams"
+        ],
+        "slug": "setrate"
+      },
+      {
+        "name": "setVolume",
+        "signature": "(params: SetVolumeParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "SetVolumeParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "SetVolumeParams"
+        ],
+        "slug": "setvolume"
+      },
+      {
+        "name": "getState",
+        "signature": "() => Promise<PlayerState>",
+        "parameters": [],
+        "returns": "Promise<PlayerState>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "PlayerState"
+        ],
+        "slug": "getstate"
+      },
+      {
+        "name": "setItemProgress",
+        "signature": "(params: SetItemProgressParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "SetItemProgressParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "SetItemProgressParams"
+        ],
+        "slug": "setitemprogress"
+      },
+      {
+        "name": "getItemProgress",
+        "signature": "(params: GetItemProgressParams) => Promise<ItemProgress>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "GetItemProgressParams"
+          }
+        ],
+        "returns": "Promise<ItemProgress>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "ItemProgress",
+          "GetItemProgressParams"
+        ],
+        "slug": "getitemprogress"
+      },
+      {
+        "name": "setPlaybackOptions",
+        "signature": "(params: SetPlaybackOptionsParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "SetPlaybackOptionsParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "SetPlaybackOptionsParams"
+        ],
+        "slug": "setplaybackoptions"
+      },
+      {
+        "name": "getPlaybackOptions",
+        "signature": "() => Promise<PlaybackOptions>",
+        "parameters": [],
+        "returns": "Promise<PlaybackOptions>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "PlaybackOptions"
+        ],
+        "slug": "getplaybackoptions"
+      },
+      {
+        "name": "setRepeatMode",
+        "signature": "(params: SetRepeatModeParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "SetRepeatModeParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "SetRepeatModeParams"
+        ],
+        "slug": "setrepeatmode"
+      },
+      {
+        "name": "setShuffle",
+        "signature": "(params: SetShuffleParams) => Promise<void>",
+        "parameters": [
+          {
+            "name": "params",
+            "docs": "",
+            "type": "SetShuffleParams"
+          }
+        ],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "SetShuffleParams"
+        ],
+        "slug": "setshuffle"
+      },
+      {
+        "name": "addListener",
+        "signature": "(eventName: 'stateChange', listenerFunc: (state: PlayerState) => void) => Promise<PluginListenerHandle>",
+        "parameters": [
+          {
+            "name": "eventName",
+            "docs": "",
+            "type": "'stateChange'"
+          },
+          {
+            "name": "listenerFunc",
+            "docs": "",
+            "type": "(state: PlayerState) => void"
+          }
+        ],
+        "returns": "Promise<PluginListenerHandle>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "PluginListenerHandle",
+          "PlayerState"
+        ],
+        "slug": "addlistenerstatechange-"
+      },
+      {
+        "name": "addListener",
+        "signature": "(eventName: 'trackChange', listenerFunc: (event: TrackChangeEvent) => void) => Promise<PluginListenerHandle>",
+        "parameters": [
+          {
+            "name": "eventName",
+            "docs": "",
+            "type": "'trackChange'"
+          },
+          {
+            "name": "listenerFunc",
+            "docs": "",
+            "type": "(event: TrackChangeEvent) => void"
+          }
+        ],
+        "returns": "Promise<PluginListenerHandle>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "PluginListenerHandle",
+          "TrackChangeEvent"
+        ],
+        "slug": "addlistenertrackchange-"
+      },
+      {
+        "name": "addListener",
+        "signature": "(eventName: 'queueChange', listenerFunc: (event: QueueChangeEvent) => void) => Promise<PluginListenerHandle>",
+        "parameters": [
+          {
+            "name": "eventName",
+            "docs": "",
+            "type": "'queueChange'"
+          },
+          {
+            "name": "listenerFunc",
+            "docs": "",
+            "type": "(event: QueueChangeEvent) => void"
+          }
+        ],
+        "returns": "Promise<PluginListenerHandle>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "PluginListenerHandle",
+          "QueueChangeEvent"
+        ],
+        "slug": "addlistenerqueuechange-"
+      },
+      {
+        "name": "addListener",
+        "signature": "(eventName: 'metadataChange', listenerFunc: (event: MetadataChangeEvent) => void) => Promise<PluginListenerHandle>",
+        "parameters": [
+          {
+            "name": "eventName",
+            "docs": "",
+            "type": "'metadataChange'"
+          },
+          {
+            "name": "listenerFunc",
+            "docs": "",
+            "type": "(event: MetadataChangeEvent) => void"
+          }
+        ],
+        "returns": "Promise<PluginListenerHandle>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [
+          "PluginListenerHandle",
+          "MetadataChangeEvent"
+        ],
+        "slug": "addlistenermetadatachange-"
+      },
+      {
+        "name": "removeAllListeners",
+        "signature": "() => Promise<void>",
+        "parameters": [],
+        "returns": "Promise<void>",
+        "tags": [],
+        "docs": "",
+        "complexTypes": [],
+        "slug": "removealllisteners"
+      }
+    ],
+    "properties": []
+  },
+  "interfaces": [
+    {
+      "name": "SetQueueParams",
+      "slug": "setqueueparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "items",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [
+            "QueueItem"
+          ],
+          "type": "QueueItem[]"
+        },
+        {
+          "name": "startIndex",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number | undefined"
+        },
+        {
+          "name": "startPositionSeconds",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number | undefined"
+        },
+        {
+          "name": "autoplay",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "boolean | undefined"
+        }
+      ]
+    },
+    {
+      "name": "QueueItem",
+      "slug": "queueitem",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "id",
+          "tags": [],
+          "docs": "Stable identifier used for reconciliation and per-item bookmarks/progress.",
+          "complexTypes": [],
+          "type": "string"
+        },
+        {
+          "name": "src",
+          "tags": [],
+          "docs": "Remote URL or app asset path (e.g. `assets/chapter01.mp3`).",
+          "complexTypes": [],
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "tags": [],
+          "docs": "Display title for OS notification/lockscreen.",
+          "complexTypes": [],
+          "type": "string"
+        },
+        {
+          "name": "artist",
+          "tags": [],
+          "docs": "Optional artist name.",
+          "complexTypes": [],
+          "type": "string | undefined"
+        },
+        {
+          "name": "album",
+          "tags": [],
+          "docs": "Optional album/podcast/book name.",
+          "complexTypes": [],
+          "type": "string | undefined"
+        },
+        {
+          "name": "artwork",
+          "tags": [],
+          "docs": "Artwork URL or app asset path.",
+          "complexTypes": [],
+          "type": "string | undefined"
+        },
+        {
+          "name": "duration",
+          "tags": [],
+          "docs": "Optional duration in seconds (streams may be unknown).",
+          "complexTypes": [],
+          "type": "number | undefined"
+        },
+        {
+          "name": "metadataUpdateUrl",
+          "tags": [],
+          "docs": "Optional metadata update URL + interval (useful for streams/radio).",
+          "complexTypes": [],
+          "type": "string | undefined"
+        },
+        {
+          "name": "metadataUpdateInterval",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number | undefined"
+        },
+        {
+          "name": "extras",
+          "tags": [],
+          "docs": "Opaque app-defined data (not interpreted by native).",
+          "complexTypes": [
+            "Record"
+          ],
+          "type": "Record<string, any> | undefined"
+        }
+      ]
+    },
+    {
+      "name": "SyncQueueResult",
+      "slug": "syncqueueresult",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "queueRevision",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "name": "SyncQueueParams",
+      "slug": "syncqueueparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "mode",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [
+            "SyncQueueMode"
+          ],
+          "type": "SyncQueueMode"
+        },
+        {
+          "name": "currentItemId",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string | undefined"
+        },
+        {
+          "name": "expectedQueueRevision",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number | undefined"
+        },
+        {
+          "name": "force",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "boolean | undefined"
+        }
+      ]
+    },
+    {
+      "name": "GetQueueResult",
+      "slug": "getqueueresult",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "queueRevision",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "items",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [
+            "QueueItem"
+          ],
+          "type": "QueueItem[]"
+        },
+        {
+          "name": "currentIndex",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "currentItemId",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string | undefined"
+        }
+      ]
+    },
+    {
+      "name": "AddQueueItemsParams",
+      "slug": "addqueueitemsparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "items",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [
+            "QueueItem"
+          ],
+          "type": "QueueItem[]"
+        },
+        {
+          "name": "atIndex",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number | undefined"
+        }
+      ]
+    },
+    {
+      "name": "RemoveQueueItemParams",
+      "slug": "removequeueitemparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "itemId",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "MoveQueueItemParams",
+      "slug": "movequeueitemparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "fromIndex",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "toIndex",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "name": "SeekParams",
+      "slug": "seekparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "positionSeconds",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "name": "SkipToIndexParams",
+      "slug": "skiptoindexparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "index",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "positionSeconds",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number | undefined"
+        }
+      ]
+    },
+    {
+      "name": "SetRateParams",
+      "slug": "setrateparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "rate",
+          "tags": [],
+          "docs": "Playback speed (e.g. `1.0` normal).",
+          "complexTypes": [],
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "name": "SetVolumeParams",
+      "slug": "setvolumeparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "volume",
+          "tags": [],
+          "docs": "Volume in 0..100.",
+          "complexTypes": [],
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "name": "PlayerState",
+      "slug": "playerstate",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "stateRevision",
+          "tags": [],
+          "docs": "Monotonic revision that increments on any state change.",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "queueRevision",
+          "tags": [],
+          "docs": "Monotonic revision that increments on any queue topology change.",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "status",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [
+            "PlaybackStatus"
+          ],
+          "type": "PlaybackStatus"
+        },
+        {
+          "name": "currentIndex",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "currentItemId",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string | undefined"
+        },
+        {
+          "name": "position",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "duration",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number | undefined"
+        },
+        {
+          "name": "rate",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "volume",
+          "tags": [],
+          "docs": "Volume in 0..100.",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "repeatMode",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [
+            "RepeatMode"
+          ],
+          "type": "RepeatMode"
+        },
+        {
+          "name": "shuffle",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "name": "SetItemProgressParams",
+      "slug": "setitemprogressparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "itemId",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string"
+        },
+        {
+          "name": "positionSeconds",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "durationSeconds",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number | undefined"
+        },
+        {
+          "name": "completed",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "boolean | undefined"
+        }
+      ]
+    },
+    {
+      "name": "ItemProgress",
+      "slug": "itemprogress",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "itemId",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string"
+        },
+        {
+          "name": "positionSeconds",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "durationSeconds",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number | undefined"
+        },
+        {
+          "name": "completed",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "boolean | undefined"
+        },
+        {
+          "name": "updatedAtEpochMs",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "name": "GetItemProgressParams",
+      "slug": "getitemprogressparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "itemId",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "SetPlaybackOptionsParams",
+      "slug": "setplaybackoptionsparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": []
+    },
+    {
+      "name": "PlaybackOptions",
+      "slug": "playbackoptions",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "previousThresholdSeconds",
+          "tags": [
+            {
+              "text": "7",
+              "name": "default"
+            }
+          ],
+          "docs": "When user presses previous: if current position is above this threshold,\nseek to 0 instead of going to previous item.",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "skipForwardSeconds",
+          "tags": [
+            {
+              "text": "10",
+              "name": "default"
+            }
+          ],
+          "docs": "OS skip buttons (seek +/- fixed seconds) configuration.",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "skipBackwardSeconds",
+          "tags": [
+            {
+              "text": "10",
+              "name": "default"
+            }
+          ],
+          "docs": "OS skip buttons (seek +/- fixed seconds) configuration.",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "enableNextPrev",
+          "tags": [
+            {
+              "text": "true",
+              "name": "default"
+            }
+          ],
+          "docs": "Whether to expose next/previous track controls in OS UIs when possible.",
+          "complexTypes": [],
+          "type": "boolean"
+        },
+        {
+          "name": "enableSeekTo",
+          "tags": [
+            {
+              "text": "true",
+              "name": "default"
+            }
+          ],
+          "docs": "Whether to expose scrubbing (seek-to) controls in OS UIs when possible.",
+          "complexTypes": [],
+          "type": "boolean"
+        },
+        {
+          "name": "enableStop",
+          "tags": [
+            {
+              "text": "true",
+              "name": "default"
+            }
+          ],
+          "docs": "Whether to expose stop controls in OS UIs when possible.",
+          "complexTypes": [],
+          "type": "boolean"
+        },
+        {
+          "name": "androidNotificationSmallIcon",
+          "tags": [],
+          "docs": "Android-only: override the drawable name for the notification small icon.\n(No extension, no `R.drawable.` prefix.)",
+          "complexTypes": [],
+          "type": "string | undefined"
+        }
+      ]
+    },
+    {
+      "name": "SetRepeatModeParams",
+      "slug": "setrepeatmodeparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "repeatMode",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [
+            "RepeatMode"
+          ],
+          "type": "RepeatMode"
+        }
+      ]
+    },
+    {
+      "name": "SetShuffleParams",
+      "slug": "setshuffleparams",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "shuffle",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "name": "PluginListenerHandle",
+      "slug": "pluginlistenerhandle",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "remove",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "() => Promise<void>"
+        }
+      ]
+    },
+    {
+      "name": "TrackChangeEvent",
+      "slug": "trackchangeevent",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "queueRevision",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "currentIndex",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "item",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [
+            "QueueItem"
+          ],
+          "type": "QueueItem"
+        }
+      ]
+    },
+    {
+      "name": "QueueChangeEvent",
+      "slug": "queuechangeevent",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": []
+    },
+    {
+      "name": "MetadataChangeEvent",
+      "slug": "metadatachangeevent",
+      "docs": "",
+      "tags": [],
+      "methods": [],
+      "properties": [
+        {
+          "name": "stateRevision",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "number"
+        },
+        {
+          "name": "itemId",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [],
+          "type": "string"
+        },
+        {
+          "name": "metadata",
+          "tags": [],
+          "docs": "",
+          "complexTypes": [
+            "Partial",
+            "QueueItem"
+          ],
+          "type": "Partial<QueueItem>"
+        }
+      ]
+    }
+  ],
+  "enums": [],
+  "typeAliases": [
+    {
+      "name": "Record",
+      "slug": "record",
+      "docs": "Construct a type with a set of properties K of type T",
+      "types": [
+        {
+          "text": "{\r\n    [P in K]: T;\r\n}",
+          "complexTypes": [
+            "K",
+            "T"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SyncQueueMode",
+      "slug": "syncqueuemode",
+      "docs": "",
+      "types": [
+        {
+          "text": "'replace'",
+          "complexTypes": []
+        },
+        {
+          "text": "'patch'",
+          "complexTypes": []
+        }
+      ]
+    },
+    {
+      "name": "PlaybackStatus",
+      "slug": "playbackstatus",
+      "docs": "",
+      "types": [
+        {
+          "text": "'playing'",
+          "complexTypes": []
+        },
+        {
+          "text": "'paused'",
+          "complexTypes": []
+        },
+        {
+          "text": "'stopped'",
+          "complexTypes": []
+        }
+      ]
+    },
+    {
+      "name": "RepeatMode",
+      "slug": "repeatmode",
+      "docs": "",
+      "types": [
+        {
+          "text": "'off'",
+          "complexTypes": []
+        },
+        {
+          "text": "'one'",
+          "complexTypes": []
+        },
+        {
+          "text": "'all'",
+          "complexTypes": []
+        }
+      ]
+    },
+    {
+      "name": "Partial",
+      "slug": "partial",
+      "docs": "Make all properties in T optional",
+      "types": [
+        {
+          "text": "{\r\n    [P in keyof T]?: T[P];\r\n}",
+          "complexTypes": [
+            "T",
+            "P"
+          ]
+        }
+      ]
+    }
+  ],
+  "pluginConfigs": []
+}

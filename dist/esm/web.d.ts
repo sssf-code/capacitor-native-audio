@@ -1,0 +1,27 @@
+import { WebPlugin } from '@capacitor/core';
+import type { AudioPlayerPlugin, AddQueueItemsParams, GetItemProgressParams, GetQueueResult, ItemProgress, PlaybackOptions, PlayerState, RemoveQueueItemParams, SeekParams, SetItemProgressParams, SetPlaybackOptionsParams, SetQueueParams, SetRateParams, SetRepeatModeParams, SetShuffleParams, SetVolumeParams, SkipToIndexParams, SyncQueueParams, SyncQueueResult, MoveQueueItemParams } from './definitions';
+export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
+    setQueue(params: SetQueueParams): Promise<void>;
+    syncQueue(params: SyncQueueParams): Promise<SyncQueueResult>;
+    getQueue(): Promise<GetQueueResult>;
+    addQueueItems(params: AddQueueItemsParams): Promise<void>;
+    removeQueueItem(params: RemoveQueueItemParams): Promise<void>;
+    moveQueueItem(params: MoveQueueItemParams): Promise<void>;
+    clearQueue(): Promise<void>;
+    play(): Promise<void>;
+    pause(): Promise<void>;
+    stop(): Promise<void>;
+    seek(params: SeekParams): Promise<void>;
+    skipToNext(): Promise<void>;
+    skipToPrevious(): Promise<void>;
+    skipToIndex(params: SkipToIndexParams): Promise<void>;
+    setRate(params: SetRateParams): Promise<void>;
+    setVolume(params: SetVolumeParams): Promise<void>;
+    getState(): Promise<PlayerState>;
+    setItemProgress(params: SetItemProgressParams): Promise<void>;
+    getItemProgress(params: GetItemProgressParams): Promise<ItemProgress>;
+    setPlaybackOptions(params: SetPlaybackOptionsParams): Promise<void>;
+    getPlaybackOptions(): Promise<PlaybackOptions>;
+    setRepeatMode(params: SetRepeatModeParams): Promise<void>;
+    setShuffle(params: SetShuffleParams): Promise<void>;
+}
