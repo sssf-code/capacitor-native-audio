@@ -334,6 +334,25 @@ final class QueuePlayer implements Player.Listener {
         queue.clear();
         queue.addAll(items);
 
+        // Handle empty queue explicitly (avoid setMediaItems edge cases on some devices).
+        if (items.isEmpty()) {
+            try {
+                player.setPlayWhenReady(false);
+            } catch (Exception ignored) {}
+            try {
+                player.stop();
+            } catch (Exception ignored) {}
+            player.clearMediaItems();
+
+            isStopped = true;
+            status = "stopped";
+
+            if (bumpQueueRevision) bumpQueueRevision();
+            bumpStateRevision();
+            persist();
+            return;
+        }
+
         List<MediaItem> mediaItems = new ArrayList<>();
         for (QueueModels.QueueItem qi : items) {
             mediaItems.add(qi.toMediaItem());

@@ -209,6 +209,13 @@ final class NativeQueuePlayer {
 
     func play() {
         guard !queue.isEmpty else { return }
+        
+        // Activate audio session when actually starting playback (avoid interrupting others on plugin init).
+        do {
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            // Continue anyway; playback may still work.
+        }
         isStopped = false
         player.playImmediately(atRate: Float(state.rate))
         state.status = .playing
@@ -237,6 +244,9 @@ final class NativeQueuePlayer {
         isStopped = true
         state.status = .stopped
         state.position = 0
+        
+        // Best-effort: release audio session so other audio can resume.
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         bumpStateRevision()
         persist()
         notifyStateChange()
@@ -418,7 +428,6 @@ final class NativeQueuePlayer {
     private func setupAudioSession() {
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
-            try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             // Ignore; playback may still work.
         }
@@ -694,13 +703,11 @@ final class NativeQueuePlayer {
     private func handleCurrentItemChanged() {
         guard !queue.isEmpty else { return }
 
-        // Try to map by media URL (best-effort) to keep state.currentIndex correct when AVQueuePlayer advances.
-        if let current = player.currentItem,
-           let assetUrl = (current.asset as? AVURLAsset)?.url
-        {
-            if let matchIndex = queue.firstIndex(where: { resolveMediaUrl($0.src) == assetUrl }) {
+        // Map by AVPlayerItem identity (not URL) so multiple items can share the same src.
+        if let current = player.currentItem {
+            if let matchIndex = playerItemsByIndex.first(where: { $0.value === current })?.key {
                 state.currentIndex = matchIndex
-                state.currentItemId = queue[matchIndex].id
+                state.currentItemId = queue.indices.contains(matchIndex) ? queue[matchIndex].id : nil
             }
         }
 
@@ -897,10 +904,14 @@ final class NativeQueuePlayer {
     }
 
     private func loadArtworkAsync(_ url: URL) {
-        URLSession.shared.dataTask(with: url) { data, _, _ in
+        let expectedItemId = state.currentItemId
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard let self else { return }
             guard let data, let image = UIImage(data: data) else { return }
             let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
             DispatchQueue.main.async {
+                // Only apply if we're still on the same item.
+                if self.state.currentItemId != expectedItemId { return }
                 var updated = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
                 updated[MPMediaItemPropertyArtwork] = artwork
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = updated
