@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "MediagridCapacitorNativeAudio",
+    name: "SSFCapacitorNativeAudio",
     platforms: [.iOS(.v15)],
     products: [
         .library(
-            name: "MediagridCapacitorNativeAudio",
+            name: "SSFCapacitorNativeAudio",
             targets: ["AudioPlayerPlugin"])
     ],
     dependencies: [

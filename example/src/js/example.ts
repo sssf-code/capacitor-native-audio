@@ -1,5 +1,5 @@
 import type { CapacitorException } from '@capacitor/core';
-import { AudioPlayer, type PlayerState, type QueueItem } from '@mediagrid/capacitor-native-audio';
+import { AudioPlayer, type PlayerState, type QueueItem } from '@ssf/capacitor-native-audio';
 
 const newsHref = new URL('/assets/karen_the_news_update.mp3', import.meta.url).href;
 const bicycleHref = new URL('/assets/komiku_bicycle.mp3', import.meta.url).href;

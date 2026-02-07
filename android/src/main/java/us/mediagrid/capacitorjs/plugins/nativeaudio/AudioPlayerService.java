@@ -1,4 +1,4 @@
-package us.mediagrid.capacitorjs.plugins.nativeaudio;
+package ssf.capacitorjs.plugins.nativeaudio;
 
 import android.app.PendingIntent;
 import android.app.NotificationChannel;
