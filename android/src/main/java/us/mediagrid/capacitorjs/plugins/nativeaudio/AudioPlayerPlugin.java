@@ -52,7 +52,9 @@ public class AudioPlayerPlugin extends Plugin {
 
     private void cleanup() {
         // Remove pending callbacks
-        mainHandler.removeCallbacksAndMessages(null);
+        if (mainHandler != null) {
+            mainHandler.removeCallbacksAndMessages(null);
+        }
 
         // Remove player listener and release controller
         if (controller != null) {
@@ -78,7 +80,7 @@ public class AudioPlayerPlugin extends Plugin {
         // Shutdown executor service
         if (executorService != null && !executorService.isShutdown()) {
             try {
-                executorService.shutdown();
+                executorService.shutdownNow();
             } catch (Exception e) {
                 Log.e(TAG, "Error shutting down executor service", e);
             }
