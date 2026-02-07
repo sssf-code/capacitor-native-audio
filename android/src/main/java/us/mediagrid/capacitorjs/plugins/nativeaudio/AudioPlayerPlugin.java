@@ -44,6 +44,47 @@ public class AudioPlayerPlugin extends Plugin {
         ensureController(null);
     }
 
+    @Override
+    protected void handleOnDestroy() {
+        super.handleOnDestroy();
+        cleanup();
+    }
+
+    private void cleanup() {
+        // Remove pending callbacks
+        mainHandler.removeCallbacksAndMessages(null);
+
+        // Remove player listener and release controller
+        if (controller != null) {
+            try {
+                controller.removeListener(playerListener);
+                controller.release();
+            } catch (Exception e) {
+                Log.e(TAG, "Error releasing controller", e);
+            }
+            controller = null;
+        }
+
+        // Release controller future
+        if (controllerFuture != null) {
+            try {
+                MediaController.releaseFuture(controllerFuture);
+            } catch (Exception e) {
+                Log.e(TAG, "Error releasing controller future", e);
+            }
+            controllerFuture = null;
+        }
+
+        // Shutdown executor service
+        if (executorService != null && !executorService.isShutdown()) {
+            try {
+                executorService.shutdown();
+            } catch (Exception e) {
+                Log.e(TAG, "Error shutting down executor service", e);
+            }
+        }
+    }
+
     // MARK: - Queue
 
     @PluginMethod
