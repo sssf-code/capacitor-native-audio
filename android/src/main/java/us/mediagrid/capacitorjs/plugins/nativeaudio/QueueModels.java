@@ -61,7 +61,7 @@ final class QueueModels {
             if (obj.has("extras") && !obj.isNull("extras")) {
                 Object extrasValue = obj.get("extras");
                 if (!(extrasValue instanceof JSONObject)) {
-                    throw new JSONException("Field 'extras' must be an object, got: " + extrasValue.getClass().getSimpleName());
+                    throw new JSONException("Field 'extras' must be a JSON object, got: " + extrasValue.getClass().getSimpleName());
                 }
                 extras = (JSONObject) extrasValue;
             }
