@@ -245,8 +245,13 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void setShuffle(PluginCall call) {
+        Boolean shuffle = call.getBoolean("shuffle");
+        if (shuffle == null) {
+            call.reject("Missing required parameter 'shuffle'.");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("shuffle", call.getBoolean("shuffle", false));
+        obj.put("shuffle", shuffle);
         sendCustom(call, QueuePlayer.CMD_SET_SHUFFLE, obj, null);
     }
 

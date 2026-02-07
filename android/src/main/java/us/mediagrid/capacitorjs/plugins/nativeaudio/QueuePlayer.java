@@ -334,6 +334,17 @@ final class QueuePlayer implements Player.Listener {
         queue.clear();
         queue.addAll(items);
 
+        // Handle empty queue explicitly to avoid setMediaItems errors
+        if (items.isEmpty()) {
+            player.clearMediaItems();
+            isStopped = true;
+            status = "stopped";
+            if (bumpQueueRevision) bumpQueueRevision();
+            bumpStateRevision();
+            persist();
+            return;
+        }
+
         List<MediaItem> mediaItems = new ArrayList<>();
         for (QueueModels.QueueItem qi : items) {
             mediaItems.add(qi.toMediaItem());
@@ -357,8 +368,10 @@ final class QueuePlayer implements Player.Listener {
         player.setMediaItems(mediaItems, resolvedIndex, posMs);
         player.prepare();
 
-        isStopped = true;
-        status = "stopped";
+        // Derive status from actual player state after prepare
+        boolean playWhenReady = player.getPlayWhenReady();
+        isStopped = !playWhenReady;
+        status = playWhenReady ? "playing" : "stopped";
 
         if (bumpQueueRevision) bumpQueueRevision();
         bumpStateRevision();
