@@ -14,6 +14,8 @@ import type {
     SetPlaybackOptionsParams,
     SetQueueParams,
     SetRateParams,
+    SetRepeatModeParams,
+    SetShuffleParams,
     SetVolumeParams,
     SkipToIndexParams,
     SyncQueueParams,
@@ -106,11 +108,11 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    setRepeatMode(): Promise<void> {
+    setRepeatMode(params: SetRepeatModeParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 
-    setShuffle(): Promise<void> {
+    setShuffle(params: SetShuffleParams): Promise<void> {
         throw this.unimplemented('Not implemented on web.');
     }
 }
