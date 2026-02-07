@@ -56,6 +56,16 @@ final class QueueModels {
         }
 
         static QueueItem fromJson(JSONObject obj) throws JSONException {
+            // Parse extras with type validation
+            JSONObject extras = null;
+            if (obj.has("extras") && !obj.isNull("extras")) {
+                Object extrasValue = obj.get("extras");
+                if (!(extrasValue instanceof JSONObject)) {
+                    throw new JSONException("Field 'extras' must be an object, got: " + extrasValue.getClass().getSimpleName());
+                }
+                extras = (JSONObject) extrasValue;
+            }
+            
             return new QueueItem(
                 obj.getString("id"),
                 obj.getString("src"),
@@ -68,7 +78,7 @@ final class QueueModels {
                 obj.has("metadataUpdateInterval") && !obj.isNull("metadataUpdateInterval")
                     ? obj.getInt("metadataUpdateInterval")
                     : null,
-                obj.has("extras") && !obj.isNull("extras") ? obj.getJSONObject("extras") : null
+                extras
             );
         }
 
