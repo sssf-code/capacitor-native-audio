@@ -24,6 +24,16 @@ final class NativeQueuePlayer {
 
     private var metadataTimer: DispatchSourceTimer?
     private var lastMetadataFingerprintByItemId: [String: String] = [:]
+    
+    // Remote command targets
+    private var playCommandTarget: Any?
+    private var pauseCommandTarget: Any?
+    private var nextTrackCommandTarget: Any?
+    private var previousTrackCommandTarget: Any?
+    private var changePlaybackPositionCommandTarget: Any?
+    private var skipForwardCommandTarget: Any?
+    private var skipBackwardCommandTarget: Any?
+    private var stopCommandTarget: Any?
 
     init(plugin: AudioPlayerPlugin, store: QueueStore = QueueStore()) {
         self.plugin = plugin
@@ -46,11 +56,30 @@ final class NativeQueuePlayer {
         
         // Remove remote command center targets
         let commandCenter = MPRemoteCommandCenter.shared()
-        commandCenter.playCommand.removeTarget(nil)
-        commandCenter.pauseCommand.removeTarget(nil)
-        commandCenter.nextTrackCommand.removeTarget(nil)
-        commandCenter.previousTrackCommand.removeTarget(nil)
-        commandCenter.changePlaybackPositionCommand.removeTarget(nil)
+        if let target = playCommandTarget {
+            commandCenter.playCommand.removeTarget(target)
+        }
+        if let target = pauseCommandTarget {
+            commandCenter.pauseCommand.removeTarget(target)
+        }
+        if let target = nextTrackCommandTarget {
+            commandCenter.nextTrackCommand.removeTarget(target)
+        }
+        if let target = previousTrackCommandTarget {
+            commandCenter.previousTrackCommand.removeTarget(target)
+        }
+        if let target = changePlaybackPositionCommandTarget {
+            commandCenter.changePlaybackPositionCommand.removeTarget(target)
+        }
+        if let target = skipForwardCommandTarget {
+            commandCenter.skipForwardCommand.removeTarget(target)
+        }
+        if let target = skipBackwardCommandTarget {
+            commandCenter.skipBackwardCommand.removeTarget(target)
+        }
+        if let target = stopCommandTarget {
+            commandCenter.stopCommand.removeTarget(target)
+        }
     }
 
     // MARK: - Public API
@@ -596,27 +625,27 @@ final class NativeQueuePlayer {
     private func setupRemoteCommands() {
         let commandCenter = MPRemoteCommandCenter.shared()
 
-        commandCenter.playCommand.addTarget { [weak self] _ in
+        playCommandTarget = commandCenter.playCommand.addTarget { [weak self] _ in
             self?.play()
             return .success
         }
 
-        commandCenter.pauseCommand.addTarget { [weak self] _ in
+        pauseCommandTarget = commandCenter.pauseCommand.addTarget { [weak self] _ in
             self?.pause()
             return .success
         }
 
-        commandCenter.nextTrackCommand.addTarget { [weak self] _ in
+        nextTrackCommandTarget = commandCenter.nextTrackCommand.addTarget { [weak self] _ in
             self?.skipToNext()
             return .success
         }
 
-        commandCenter.previousTrackCommand.addTarget { [weak self] _ in
+        previousTrackCommandTarget = commandCenter.previousTrackCommand.addTarget { [weak self] _ in
             self?.skipToPrevious()
             return .success
         }
 
-        commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
+        changePlaybackPositionCommandTarget = commandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let event = event as? MPChangePlaybackPositionCommandEvent else {
                 return .commandFailed
             }
@@ -624,19 +653,19 @@ final class NativeQueuePlayer {
             return .success
         }
 
-        commandCenter.skipForwardCommand.addTarget { [weak self] _ in
+        skipForwardCommandTarget = commandCenter.skipForwardCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
             self.seek(positionSeconds: self.state.position + self.options.skipForwardSeconds)
             return .success
         }
 
-        commandCenter.skipBackwardCommand.addTarget { [weak self] _ in
+        skipBackwardCommandTarget = commandCenter.skipBackwardCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
             self.seek(positionSeconds: max(0, self.state.position - self.options.skipBackwardSeconds))
             return .success
         }
 
-        commandCenter.stopCommand.addTarget { [weak self] _ in
+        stopCommandTarget = commandCenter.stopCommand.addTarget { [weak self] _ in
             self?.stop()
             return .success
         }
