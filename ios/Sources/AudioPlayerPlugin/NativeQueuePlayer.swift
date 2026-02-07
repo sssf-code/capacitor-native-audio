@@ -13,6 +13,8 @@ final class NativeQueuePlayer {
     private var currentItemObservation: NSKeyValueObservation?
 
     private(set) var queue: [QueueItem] = []
+    private var baseQueue: [QueueItem] = []
+    private var shuffleQueue: [QueueItem]? = nil
     private var playerItemsByIndex: [Int: AVPlayerItem] = [:]
     private var progressByItemId: [String: ItemProgress] = [:]
 
@@ -41,12 +43,29 @@ final class NativeQueuePlayer {
     func setQueue(items: [QueueItem], startIndex: Int?, startPositionSeconds: Double?, autoplay: Bool?) {
         let idx = startIndex ?? 0
         let pos = startPositionSeconds ?? 0
-        rebuildQueue(items: items, desiredItemId: nil, desiredIndex: idx, desiredPositionSeconds: pos, shouldBumpQueueRevision: true)
+        baseQueue = items
+        if state.shuffle {
+            shuffleQueue = buildInitialShuffleQueue(from: baseQueue, currentItemId: items.indices.contains(idx) ? items[idx].id : nil)
+        } else {
+            shuffleQueue = nil
+        }
+        let effective = resolvedEffectiveQueue()
+        rebuildQueue(items: effective, desiredItemId: nil, desiredIndex: idx, desiredPositionSeconds: pos, shouldBumpQueueRevision: true)
         if autoplay == true { play() }
     }
 
     func syncQueue(mode: String, items: [QueueItem], currentItemId: String?, startIndex: Int?, startPositionSeconds: Double?, autoplay: Bool?) {
         let desiredId = currentItemId ?? state.currentItemId
+        baseQueue = items
+        // If shuffle is enabled, always rebuild from base (patch semantics become ambiguous).
+        if state.shuffle {
+            shuffleQueue = buildInitialShuffleQueue(from: baseQueue, currentItemId: desiredId)
+            let effective = resolvedEffectiveQueue()
+            rebuildQueue(items: effective, desiredItemId: desiredId, desiredIndex: startIndex, desiredPositionSeconds: startPositionSeconds, shouldBumpQueueRevision: true)
+            if autoplay == true { play() }
+            return
+        }
+        shuffleQueue = nil
 
         // If caller specified explicit start index/position, treat as replace.
         if startIndex != nil || startPositionSeconds != nil {
@@ -82,34 +101,51 @@ final class NativeQueuePlayer {
     }
 
     func addQueueItems(items: [QueueItem], atIndex: Int?) {
-        var updated = queue
+        var updated = baseQueue
         let insertion = max(0, min(atIndex ?? updated.count, updated.count))
         updated.insert(contentsOf: items, at: insertion)
 
         // Preserve current item by id if possible.
         let desiredId = state.currentItemId
-        rebuildQueue(items: updated, desiredItemId: desiredId, desiredIndex: nil, desiredPositionSeconds: nil, shouldBumpQueueRevision: true)
+        baseQueue = updated
+        if state.shuffle {
+            shuffleQueue = rebuildShuffleQueueAfterBaseChange(currentItemId: desiredId)
+        }
+        let effective = resolvedEffectiveQueue()
+        rebuildQueue(items: effective, desiredItemId: desiredId, desiredIndex: nil, desiredPositionSeconds: nil, shouldBumpQueueRevision: true)
     }
 
     func removeQueueItem(itemId: String) {
         let desiredId = state.currentItemId
-        let updated = queue.filter { $0.id != itemId }
-        rebuildQueue(items: updated, desiredItemId: desiredId, desiredIndex: nil, desiredPositionSeconds: nil, shouldBumpQueueRevision: true)
+        let updated = baseQueue.filter { $0.id != itemId }
+        baseQueue = updated
+        if state.shuffle {
+            shuffleQueue = rebuildShuffleQueueAfterBaseChange(currentItemId: desiredId)
+        }
+        let effective = resolvedEffectiveQueue()
+        rebuildQueue(items: effective, desiredItemId: desiredId, desiredIndex: nil, desiredPositionSeconds: nil, shouldBumpQueueRevision: true)
     }
 
     func moveQueueItem(fromIndex: Int, toIndex: Int) {
-        guard queue.indices.contains(fromIndex) else { return }
-        var updated = queue
+        guard baseQueue.indices.contains(fromIndex) else { return }
+        var updated = baseQueue
         let item = updated.remove(at: fromIndex)
         let insertion = max(0, min(toIndex, updated.count))
         updated.insert(item, at: insertion)
         let desiredId = state.currentItemId
-        rebuildQueue(items: updated, desiredItemId: desiredId, desiredIndex: nil, desiredPositionSeconds: nil, shouldBumpQueueRevision: true)
+        baseQueue = updated
+        if state.shuffle {
+            shuffleQueue = rebuildShuffleQueueAfterBaseChange(currentItemId: desiredId)
+        }
+        let effective = resolvedEffectiveQueue()
+        rebuildQueue(items: effective, desiredItemId: desiredId, desiredIndex: nil, desiredPositionSeconds: nil, shouldBumpQueueRevision: true)
     }
 
     func clearQueue() {
         stopMetadataPolling()
         queue = []
+        baseQueue = []
+        shuffleQueue = nil
         playerItemsByIndex = [:]
         player.removeAllItems()
         state.currentIndex = 0
@@ -268,15 +304,71 @@ final class NativeQueuePlayer {
     }
 
     func setShuffle(_ enabled: Bool) {
-        // Shuffle playback order isn't implemented yet for AVQueuePlayer, but we persist the flag
-        // so React can reflect it and future native shuffle can be added without changing storage.
+        let wasPlaying = state.status == .playing
+        let desiredId = state.currentItemId
+        let desiredPos = state.position
+
         state.shuffle = enabled
-        bumpStateRevision()
-        persist()
-        notifyStateChange()
+        if enabled {
+            shuffleQueue = buildInitialShuffleQueue(from: baseQueue, currentItemId: desiredId)
+        } else {
+            shuffleQueue = nil
+        }
+
+        let effective = resolvedEffectiveQueue()
+        rebuildQueue(
+            items: effective,
+            desiredItemId: desiredId,
+            desiredIndex: nil,
+            desiredPositionSeconds: desiredPos,
+            shouldBumpQueueRevision: true
+        )
+        if wasPlaying { play() }
     }
 
     // MARK: - Internal: Audio session
+    private func resolvedEffectiveQueue() -> [QueueItem] {
+        if !state.shuffle { return baseQueue }
+        if let sq = shuffleQueue {
+            let baseIds = baseQueue.map(\.id)
+            let sqIds = sq.map(\.id)
+            if sqIds.count == baseIds.count, Set(sqIds) == Set(baseIds) {
+                return sq
+            }
+        }
+        // Fallback: rebuild a shuffled order from the base queue.
+        shuffleQueue = buildInitialShuffleQueue(from: baseQueue, currentItemId: state.currentItemId)
+        return shuffleQueue ?? baseQueue
+    }
+
+    private func buildInitialShuffleQueue(from base: [QueueItem], currentItemId: String?) -> [QueueItem] {
+        guard base.count >= 2 else { return base }
+        let currentId = currentItemId ?? base.first?.id
+        let currentIndex = currentId.flatMap { id in base.firstIndex(where: { $0.id == id }) } ?? 0
+        let prefix = Array(base.prefix(currentIndex + 1))
+        var tail = Array(base.suffix(from: min(currentIndex + 1, base.count)))
+        tail.shuffle()
+        return prefix + tail
+    }
+
+    private func rebuildShuffleQueueAfterBaseChange(currentItemId: String?) -> [QueueItem] {
+        guard state.shuffle else { return baseQueue }
+        guard baseQueue.count >= 2 else { return baseQueue }
+
+        let baseById: [String: QueueItem] = Dictionary(uniqueKeysWithValues: baseQueue.map { ($0.id, $0) })
+        let desiredId = currentItemId ?? state.currentItemId
+
+        let existing = shuffleQueue ?? queue
+        var prefixIds: [String] = []
+        if let desiredId, let idx = existing.firstIndex(where: { $0.id == desiredId }) {
+            prefixIds = existing.prefix(idx + 1).map(\.id).filter { baseById[$0] != nil }
+        }
+
+        let prefixItems: [QueueItem] = prefixIds.compactMap { baseById[$0] }
+        var remaining: [QueueItem] = baseQueue.filter { !prefixIds.contains($0.id) }
+        remaining.shuffle()
+        return prefixItems + remaining
+    }
 
     private func setupAudioSession() {
         do {
@@ -695,8 +787,9 @@ final class NativeQueuePlayer {
     private func persist() {
         guard !isRestoring else { return }
         let persisted = PersistedState(
-            schemaVersion: 1,
+            schemaVersion: 2,
             queue: queue,
+            baseQueue: baseQueue,
             progressByItemId: progressByItemId,
             options: options,
             state: state
@@ -705,17 +798,28 @@ final class NativeQueuePlayer {
     }
 
     private func restoreIfAvailable() {
-        guard let persisted = store.load(), persisted.schemaVersion == 1 else { return }
+        guard let persisted = store.load(), (persisted.schemaVersion == 1 || persisted.schemaVersion == 2) else { return }
         isRestoring = true
         defer { isRestoring = false }
 
         options = persisted.options
         progressByItemId = persisted.progressByItemId
         state = persisted.state
+        baseQueue = persisted.baseQueue ?? persisted.queue
+
+        let effective: [QueueItem] = {
+            if persisted.schemaVersion == 2 {
+                // Persisted `queue` is the last effective order used by the player.
+                return state.shuffle ? persisted.queue : baseQueue
+            }
+            // v1: queue is the only order we have.
+            return persisted.queue
+        }()
+        shuffleQueue = state.shuffle ? effective : nil
 
         // Rebuild without bumping revisions.
         rebuildQueue(
-            items: persisted.queue,
+            items: effective,
             desiredItemId: persisted.state.currentItemId,
             desiredIndex: persisted.state.currentIndex,
             desiredPositionSeconds: persisted.state.position,
@@ -865,6 +969,9 @@ final class NativeQueuePlayer {
         lastMetadataFingerprintByItemId[itemId] = fingerprint
 
         queue[state.currentIndex] = item
+        if let baseIdx = baseQueue.firstIndex(where: { $0.id == itemId }) {
+            baseQueue[baseIdx] = item
+        }
         bumpStateRevision()
         persist()
 

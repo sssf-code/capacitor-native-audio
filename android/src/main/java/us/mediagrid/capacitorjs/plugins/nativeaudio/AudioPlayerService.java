@@ -4,6 +4,7 @@ import android.app.PendingIntent;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.Intent;
+import android.content.res.AssetManager;
 import android.os.Build;
 import android.util.Log;
 import androidx.annotation.Nullable;
@@ -14,6 +15,10 @@ import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.session.DefaultMediaNotificationProvider;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import org.json.JSONObject;
 
 public class AudioPlayerService extends MediaSessionService {
 
@@ -62,6 +67,8 @@ public class AudioPlayerService extends MediaSessionService {
         try {
             provider.getClass().getMethod("setSmallIcon", int.class).invoke(provider, iconResId);
         } catch (Exception ignored) {}
+        // Optional Media3 notification policies (read from Capacitor config).
+        tryApplyNotificationPoliciesFromCapacitorConfig(provider);
         setMediaNotificationProvider(provider);
     }
 
@@ -111,5 +118,57 @@ public class AudioPlayerService extends MediaSessionService {
             NotificationManager.IMPORTANCE_LOW
         );
         nm.createNotificationChannel(channel);
+    }
+
+    private void tryApplyNotificationPoliciesFromCapacitorConfig(DefaultMediaNotificationProvider provider) {
+        try {
+            JSONObject cfg = readAudioPlayerPluginConfig();
+            if (cfg == null) return;
+
+            if (cfg.has("showNotificationForIdlePlayer")) {
+                boolean v = cfg.optBoolean("showNotificationForIdlePlayer", true);
+                try {
+                    provider
+                        .getClass()
+                        .getMethod("setShowNotificationForIdlePlayer", boolean.class)
+                        .invoke(provider, v);
+                } catch (Exception ignored) {}
+            }
+
+            if (cfg.has("foregroundServiceTimeoutMs")) {
+                long ms = Math.max(0, cfg.optLong("foregroundServiceTimeoutMs", 0));
+                // Signature changed across Media3 versions; try both.
+                try {
+                    provider.getClass().getMethod("setForegroundServiceTimeoutMs", long.class).invoke(provider, ms);
+                } catch (Exception ignored) {}
+                try {
+                    provider
+                        .getClass()
+                        .getMethod("setForegroundServiceTimeoutMs", int.class)
+                        .invoke(provider, (int) Math.min(Integer.MAX_VALUE, ms));
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+    }
+
+    @Nullable
+    private JSONObject readAudioPlayerPluginConfig() {
+        try {
+            AssetManager am = getAssets();
+            BufferedReader r = new BufferedReader(
+                new InputStreamReader(am.open("capacitor.config.json"), StandardCharsets.UTF_8)
+            );
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = r.readLine()) != null) sb.append(line);
+            r.close();
+
+            JSONObject root = new JSONObject(sb.toString());
+            JSONObject plugins = root.optJSONObject("plugins");
+            if (plugins == null) return null;
+            return plugins.optJSONObject("AudioPlayer");
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
