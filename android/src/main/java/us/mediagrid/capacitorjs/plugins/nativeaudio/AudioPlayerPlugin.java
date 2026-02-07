@@ -5,7 +5,6 @@ import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.media3.common.Player;
 import androidx.media3.session.MediaController;
@@ -19,15 +18,12 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import org.json.JSONObject;
 
 @CapacitorPlugin(name = "AudioPlayer")
 public class AudioPlayerPlugin extends Plugin {
 
     private static final String TAG = "AudioPlayerPlugin";
-    public final ExecutorService executorService = Executors.newCachedThreadPool();
 
     private ListenableFuture<MediaController> controllerFuture;
     private MediaController controller;
@@ -42,6 +38,12 @@ public class AudioPlayerPlugin extends Plugin {
     public void load() {
         super.load();
         ensureController(null);
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        cleanup();
+        super.handleOnDestroy();
     }
 
     // MARK: - Queue
@@ -229,11 +231,13 @@ public class AudioPlayerPlugin extends Plugin {
         ComponentName serviceComponent = new ComponentName(context, AudioPlayerService.class);
         SessionToken token = new SessionToken(context, serviceComponent);
 
-        controllerFuture = new MediaController.Builder(context, token).buildAsync();
-        controllerFuture.addListener(() -> {
+        final ListenableFuture<MediaController> future = new MediaController.Builder(context, token).buildAsync();
+        controllerFuture = future;
+        future.addListener(() -> {
             try {
-                controller = controllerFuture.get();
-                controller.addListener(playerListener);
+                MediaController c = future.get();
+                controller = c;
+                c.addListener(playerListener);
             } catch (Exception e) {
                 if (callToReject != null) callToReject.reject("Failed to initialize media controller", e);
             }
@@ -259,14 +263,15 @@ public class AudioPlayerPlugin extends Plugin {
         @Nullable ResultHandler handler
     ) {
         ensureController(call);
-        if (controllerFuture == null) {
+        final ListenableFuture<MediaController> cf = controllerFuture;
+        if (cf == null) {
             call.reject("Media controller not initialized.");
             return;
         }
 
-        controllerFuture.addListener(() -> {
+        cf.addListener(() -> {
             try {
-                MediaController c = controllerFuture.get();
+                MediaController c = cf.get();
                 Bundle args = new Bundle();
                 args.putString("json", payload != null ? payload.toString() : "{}");
                 ListenableFuture<SessionResult> future = c.sendCustomCommand(
@@ -335,10 +340,11 @@ public class AudioPlayerPlugin extends Plugin {
     }
 
     private void sendCustomCommandInternal(String action, String resultKey, String eventName) {
-        if (controllerFuture == null) return;
-        controllerFuture.addListener(() -> {
+        final ListenableFuture<MediaController> cf = controllerFuture;
+        if (cf == null) return;
+        cf.addListener(() -> {
             try {
-                MediaController c = controllerFuture.get();
+                MediaController c = cf.get();
                 Bundle args = new Bundle();
                 args.putString("json", "{}");
                 ListenableFuture<SessionResult> future = c.sendCustomCommand(new SessionCommand(action, Bundle.EMPTY), args);
@@ -424,6 +430,31 @@ public class AudioPlayerPlugin extends Plugin {
                 }, MoreExecutors.directExecutor());
             } catch (Exception ignored) {}
         }, MoreExecutors.directExecutor());
+    }
+
+    private void cleanup() {
+        // Cancel any pending emit callbacks.
+        mainHandler.removeCallbacksAndMessages(null);
+        emitScheduled = false;
+
+        // Release controller (best-effort).
+        if (controller != null) {
+            try {
+                controller.removeListener(playerListener);
+            } catch (Exception ignored) {}
+            try {
+                controller.release();
+            } catch (Exception ignored) {}
+            controller = null;
+        }
+
+        // Release controller future (best-effort).
+        if (controllerFuture != null) {
+            try {
+                MediaController.releaseFuture(controllerFuture);
+            } catch (Exception ignored) {}
+            controllerFuture = null;
+        }
     }
 }
 
