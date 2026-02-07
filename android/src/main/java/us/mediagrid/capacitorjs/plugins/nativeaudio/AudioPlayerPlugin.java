@@ -33,6 +33,8 @@ public class AudioPlayerPlugin extends Plugin {
     private String lastMetadataFingerprintByCurrentItem = null;
     private String lastMetadataItemId = null;
     private long lastStateRevision = 0;
+    private long lastQueueRevision = 0;
+    private String lastCurrentItemId = null;
 
     @Override
     public void load() {
@@ -442,6 +444,12 @@ public class AudioPlayerPlugin extends Plugin {
                             org.json.JSONArray arr = (org.json.JSONArray) itemsObj;
                             if (idx < 0 || idx >= arr.length()) return;
                             JSObject item = new JSObject(arr.getJSONObject(idx).toString());
+                            String itemId = item.getString("id");
+                            
+                            // Deduplicate: only emit if currentItemId changed.
+                            if (itemId != null && itemId.equals(lastCurrentItemId)) return;
+                            lastCurrentItemId = itemId;
+                            
                             JSObject payloadObj = new JSObject();
                             long queueRevision = queueObj.has("queueRevision") ? queueObj.getLong("queueRevision") : 0;
                             payloadObj.put("queueRevision", queueRevision);
@@ -455,9 +463,12 @@ public class AudioPlayerPlugin extends Plugin {
                             try {
                                 JSObject stateObj = new JSObject(json);
                                 Object sr = stateObj.get("stateRevision");
-                                if (sr instanceof Number) {
-                                    lastStateRevision = ((Number) sr).longValue();
-                                }
+                                long stateRevision = (sr instanceof Number) ? ((Number) sr).longValue() : 0;
+                                
+                                // Deduplicate: only emit if stateRevision changed.
+                                if (stateRevision > 0 && stateRevision == lastStateRevision) return;
+                                lastStateRevision = stateRevision;
+                                
                                 notifyListeners("stateChange", stateObj);
                             } catch (Exception ignored) {}
                             return;
@@ -506,6 +517,15 @@ public class AudioPlayerPlugin extends Plugin {
                             return;
                         }
 
+                        if ("queueChange".equals(eventName)) {
+                            JSObject queueObj = new JSObject(json);
+                            long queueRevision = queueObj.has("queueRevision") ? queueObj.getLong("queueRevision") : 0;
+                            
+                            // Deduplicate: only emit if queueRevision changed.
+                            if (queueRevision > 0 && queueRevision == lastQueueRevision) return;
+                            lastQueueRevision = queueRevision;
+                        }
+
                         notifyListeners(eventName, new JSObject(json));
                     } catch (Exception ignored) {}
                 }, MoreExecutors.directExecutor());
@@ -517,6 +537,13 @@ public class AudioPlayerPlugin extends Plugin {
         // Cancel any pending emit callbacks.
         mainHandler.removeCallbacksAndMessages(null);
         emitScheduled = false;
+        
+        // Reset tracking state.
+        lastStateRevision = 0;
+        lastQueueRevision = 0;
+        lastCurrentItemId = null;
+        lastMetadataItemId = null;
+        lastMetadataFingerprintByCurrentItem = null;
 
         // Release controller (best-effort).
         if (controller != null) {
