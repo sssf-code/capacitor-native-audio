@@ -447,7 +447,9 @@ public class AudioPlayerPlugin extends Plugin {
                             String itemId = item.getString("id");
                             
                             // Deduplicate: only emit if currentItemId changed.
-                            if (itemId != null && itemId.equals(lastCurrentItemId)) return;
+                            boolean isSameItem = (itemId == null && lastCurrentItemId == null) || 
+                                                (itemId != null && itemId.equals(lastCurrentItemId));
+                            if (isSameItem) return;
                             lastCurrentItemId = itemId;
                             
                             JSObject payloadObj = new JSObject();
@@ -476,7 +478,7 @@ public class AudioPlayerPlugin extends Plugin {
 
                         if ("metadataChange".equals(eventName)) {
                             JSObject queueObj = new JSObject(json);
-                            int stateRevision = queueObj.getInteger("stateRevision", lastStateRevision);
+                            int stateRevision = queueObj.getInteger("stateRevision", 0);
                             int idx = queueObj.getInteger("currentIndex", 0);
                             Object itemsObj = queueObj.get("items");
                             if (!(itemsObj instanceof org.json.JSONArray)) return;
