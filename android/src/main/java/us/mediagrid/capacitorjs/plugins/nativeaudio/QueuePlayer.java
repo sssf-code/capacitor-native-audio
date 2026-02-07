@@ -370,8 +370,10 @@ final class QueuePlayer implements Player.Listener {
 
         // Derive status from actual player state after prepare
         boolean playWhenReady = player.getPlayWhenReady();
-        isStopped = !playWhenReady;
-        status = playWhenReady ? "playing" : "stopped";
+        int playbackState = player.getPlaybackState();
+        // Only report "playing" if playWhenReady is true AND the player is ready to play
+        isStopped = !playWhenReady || playbackState == Player.STATE_IDLE;
+        status = (playWhenReady && playbackState == Player.STATE_READY) ? "playing" : "stopped";
 
         if (bumpQueueRevision) bumpQueueRevision();
         bumpStateRevision();
