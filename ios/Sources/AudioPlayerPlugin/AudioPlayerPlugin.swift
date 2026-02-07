@@ -348,7 +348,11 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     private func convertToJSONValue(_ value: Any) throws -> JSONValue {
         if value is NSNull {
             return .null
-        } else if let bool = value as? Bool {
+        }
+        
+        // Use Mirror to check the actual type to avoid Bool/Number confusion
+        let mirror = Mirror(reflecting: value)
+        if mirror.subjectType == Bool.self, let bool = value as? Bool {
             return .bool(bool)
         } else if let number = value as? Double {
             return .number(number)
