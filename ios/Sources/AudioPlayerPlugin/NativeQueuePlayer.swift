@@ -285,8 +285,9 @@ final class NativeQueuePlayer {
         guard !queue.isEmpty else { return }
         let clamped = max(0, min(index, queue.count - 1))
         let pos = max(0, positionSeconds ?? 0)
+        let wasPlaying = (state.status == .playing)
         rebuildQueue(items: queue, desiredItemId: queue[clamped].id, desiredIndex: clamped, desiredPositionSeconds: pos, shouldBumpQueueRevision: false)
-        if state.status == .playing { play() }
+        if wasPlaying { play() }
     }
 
     func setRate(_ rate: Double) {
@@ -724,7 +725,7 @@ final class NativeQueuePlayer {
         guard let endedItem = notification.object as? AVPlayerItem else { return }
 
         // Identify which index ended
-        let endedIndex = playerItemsByIndex.first(where: { $0.value == endedItem })?.key
+        let endedIndex = playerItemsByIndex.first(where: { $0.value === endedItem })?.key
         guard let idx = endedIndex, queue.indices.contains(idx) else { return }
 
         // Mark item completed using ended item's duration (avoid auto-advance races).
