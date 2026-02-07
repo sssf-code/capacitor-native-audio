@@ -110,10 +110,10 @@ struct PlayerState: Codable, Equatable {
 }
 
 struct PersistedState: Codable {
-    var schemaVersion: Int = 2
+    var schemaVersion: Int = 1
     var queue: [QueueItem]
-    /// Base (unshuffled) queue order, if available.
-    var baseQueue: [QueueItem]?
+    /// Base (unshuffled) queue order.
+    var baseQueue: [QueueItem]
     var progressByItemId: [String: ItemProgress]
     var options: PlaybackOptions
     var state: PlayerState

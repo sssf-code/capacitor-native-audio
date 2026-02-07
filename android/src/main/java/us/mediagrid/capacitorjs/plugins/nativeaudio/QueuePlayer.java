@@ -754,13 +754,9 @@ final class QueuePlayer implements Player.Listener {
 
             JSONObject obj = new JSONObject(sb.toString());
             String title = obj.optString("title", null);
-            if (title == null) title = obj.optString("song_title", null);
             String artist = obj.optString("artist", null);
-            if (artist == null) artist = obj.optString("artist_name", null);
             String album = obj.optString("album", null);
-            if (album == null) album = obj.optString("album_title", null);
             String artwork = obj.optString("artwork", null);
-            if (artwork == null) artwork = obj.optString("artwork_source", null);
 
             if (title == null && artist == null && album == null && artwork == null) return;
 

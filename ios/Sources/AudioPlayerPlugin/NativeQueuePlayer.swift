@@ -787,7 +787,7 @@ final class NativeQueuePlayer {
     private func persist() {
         guard !isRestoring else { return }
         let persisted = PersistedState(
-            schemaVersion: 2,
+            schemaVersion: 1,
             queue: queue,
             baseQueue: baseQueue,
             progressByItemId: progressByItemId,
@@ -798,23 +798,16 @@ final class NativeQueuePlayer {
     }
 
     private func restoreIfAvailable() {
-        guard let persisted = store.load(), (persisted.schemaVersion == 1 || persisted.schemaVersion == 2) else { return }
+        guard let persisted = store.load(), persisted.schemaVersion == 1 else { return }
         isRestoring = true
         defer { isRestoring = false }
 
         options = persisted.options
         progressByItemId = persisted.progressByItemId
         state = persisted.state
-        baseQueue = persisted.baseQueue ?? persisted.queue
+        baseQueue = persisted.baseQueue
 
-        let effective: [QueueItem] = {
-            if persisted.schemaVersion == 2 {
-                // Persisted `queue` is the last effective order used by the player.
-                return state.shuffle ? persisted.queue : baseQueue
-            }
-            // v1: queue is the only order we have.
-            return persisted.queue
-        }()
+        let effective: [QueueItem] = state.shuffle ? persisted.queue : baseQueue
         shuffleQueue = state.shuffle ? effective : nil
 
         // Rebuild without bumping revisions.
@@ -923,11 +916,10 @@ final class NativeQueuePlayer {
             guard let data else { return }
             guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
 
-            // Accept both camelCase and the old snake_case keys.
-            let title = (obj["title"] as? String) ?? (obj["song_title"] as? String)
-            let artist = (obj["artist"] as? String) ?? (obj["artist_name"] as? String)
-            let album = (obj["album"] as? String) ?? (obj["album_title"] as? String)
-            let artwork = (obj["artwork"] as? String) ?? (obj["artwork_source"] as? String)
+            let title = obj["title"] as? String
+            let artist = obj["artist"] as? String
+            let album = obj["album"] as? String
+            let artwork = obj["artwork"] as? String
 
             guard title != nil || artist != nil || album != nil || artwork != nil else { return }
 
