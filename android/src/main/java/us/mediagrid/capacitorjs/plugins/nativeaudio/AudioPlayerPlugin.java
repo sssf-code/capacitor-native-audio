@@ -78,8 +78,13 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void removeQueueItem(PluginCall call) {
+        String itemId = call.getString("itemId");
+        if (itemId == null || itemId.isEmpty()) {
+            call.reject("Missing required parameter 'itemId'");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("itemId", call.getString("itemId"));
+        obj.put("itemId", itemId);
         sendCustom(call, QueuePlayer.CMD_REMOVE_ITEM, obj, null);
     }
 
@@ -98,47 +103,102 @@ public class AudioPlayerPlugin extends Plugin {
     @PluginMethod
     public void play(PluginCall call) {
         ensureController(call);
-        if (controller == null) return;
-        controller.play();
-        call.resolve();
+        final ListenableFuture<MediaController> cf = controllerFuture;
+        if (cf == null) {
+            call.reject("Media controller not initialized.");
+            return;
+        }
+        cf.addListener(() -> {
+            try {
+                MediaController c = cf.get();
+                c.play();
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Failed to play", e);
+            }
+        }, MoreExecutors.directExecutor());
     }
 
     @PluginMethod
     public void pause(PluginCall call) {
         ensureController(call);
-        if (controller == null) return;
-        controller.pause();
-        call.resolve();
+        final ListenableFuture<MediaController> cf = controllerFuture;
+        if (cf == null) {
+            call.reject("Media controller not initialized.");
+            return;
+        }
+        cf.addListener(() -> {
+            try {
+                MediaController c = cf.get();
+                c.pause();
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Failed to pause", e);
+            }
+        }, MoreExecutors.directExecutor());
     }
 
     @PluginMethod
     public void stop(PluginCall call) {
         ensureController(call);
-        if (controller == null) return;
-        controller.stop();
-        controller.seekTo(0);
-        call.resolve();
+        final ListenableFuture<MediaController> cf = controllerFuture;
+        if (cf == null) {
+            call.reject("Media controller not initialized.");
+            return;
+        }
+        cf.addListener(() -> {
+            try {
+                MediaController c = cf.get();
+                c.stop();
+                c.seekTo(0);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Failed to stop", e);
+            }
+        }, MoreExecutors.directExecutor());
     }
 
     @PluginMethod
     public void seek(PluginCall call) {
         ensureController(call);
-        if (controller == null) return;
         Double pos = call.getDouble("positionSeconds");
         if (pos == null) {
             call.reject("positionSeconds is required.");
             return;
         }
-        controller.seekTo((long) (Math.max(0, pos) * 1000));
-        call.resolve();
+        final ListenableFuture<MediaController> cf = controllerFuture;
+        if (cf == null) {
+            call.reject("Media controller not initialized.");
+            return;
+        }
+        cf.addListener(() -> {
+            try {
+                MediaController c = cf.get();
+                c.seekTo((long) (Math.max(0, pos) * 1000));
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Failed to seek", e);
+            }
+        }, MoreExecutors.directExecutor());
     }
 
     @PluginMethod
     public void skipToNext(PluginCall call) {
         ensureController(call);
-        if (controller == null) return;
-        controller.seekToNextMediaItem();
-        call.resolve();
+        final ListenableFuture<MediaController> cf = controllerFuture;
+        if (cf == null) {
+            call.reject("Media controller not initialized.");
+            return;
+        }
+        cf.addListener(() -> {
+            try {
+                MediaController c = cf.get();
+                c.seekToNextMediaItem();
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Failed to skip to next", e);
+            }
+        }, MoreExecutors.directExecutor());
     }
 
     @PluginMethod
@@ -153,15 +213,25 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void setRate(PluginCall call) {
+        Double rate = call.getDouble("rate");
+        if (rate == null) {
+            call.reject("Missing required parameter 'rate'");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("rate", call.getDouble("rate"));
+        obj.put("rate", rate);
         sendCustom(call, QueuePlayer.CMD_SET_RATE, obj, null);
     }
 
     @PluginMethod
     public void setVolume(PluginCall call) {
+        Double volume = call.getDouble("volume");
+        if (volume == null) {
+            call.reject("Missing required parameter 'volume'");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("volume", call.getDouble("volume"));
+        obj.put("volume", volume);
         sendCustom(call, QueuePlayer.CMD_SET_VOLUME, obj, null);
     }
 
@@ -184,8 +254,13 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void getItemProgress(PluginCall call) {
+        String itemId = call.getString("itemId");
+        if (itemId == null || itemId.isEmpty()) {
+            call.reject("Missing required parameter 'itemId'");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("itemId", call.getString("itemId"));
+        obj.put("itemId", itemId);
         sendCustom(call, QueuePlayer.CMD_GET_PROGRESS, obj, result -> {
             String json = result.extras != null ? result.extras.getString("progress") : null;
             call.resolve(json != null ? new JSObject(json) : new JSObject());
@@ -201,8 +276,13 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void setRepeatMode(PluginCall call) {
+        String repeatMode = call.getString("repeatMode");
+        if (repeatMode == null || repeatMode.isEmpty()) {
+            call.reject("Missing required parameter 'repeatMode'");
+            return;
+        }
         JSObject obj = new JSObject();
-        obj.put("repeatMode", call.getString("repeatMode"));
+        obj.put("repeatMode", repeatMode);
         sendCustom(call, QueuePlayer.CMD_SET_REPEAT_MODE, obj, null);
     }
 
@@ -385,6 +465,7 @@ public class AudioPlayerPlugin extends Plugin {
 
                         if ("metadataChange".equals(eventName)) {
                             JSObject queueObj = new JSObject(json);
+                            int stateRevision = queueObj.getInteger("stateRevision", lastStateRevision);
                             int idx = queueObj.getInteger("currentIndex", 0);
                             Object itemsObj = queueObj.get("items");
                             if (!(itemsObj instanceof org.json.JSONArray)) return;
@@ -418,7 +499,7 @@ public class AudioPlayerPlugin extends Plugin {
                             if (artwork != null) metadata.put("artwork", artwork);
 
                             JSObject payloadObj = new JSObject();
-                            payloadObj.put("stateRevision", lastStateRevision);
+                            payloadObj.put("stateRevision", stateRevision);
                             payloadObj.put("itemId", itemId);
                             payloadObj.put("metadata", metadata);
                             notifyListeners("metadataChange", payloadObj);
