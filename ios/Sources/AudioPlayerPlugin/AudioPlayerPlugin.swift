@@ -354,7 +354,10 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         let mirror = Mirror(reflecting: value)
         if mirror.subjectType == Bool.self, let bool = value as? Bool {
             return .bool(bool)
-        } else if let number = value as? Double {
+        }
+        
+        // Now check numeric types (Bool won't reach here)
+        if let number = value as? Double {
             return .number(number)
         } else if let number = value as? Int {
             return .number(Double(number))
