@@ -36,6 +36,23 @@ final class NativeQueuePlayer {
         restoreIfAvailable()
     }
 
+    deinit {
+        // Cancel any active timers
+        metadataTimer?.cancel()
+        metadataTimer = nil
+        
+        // Remove observers
+        teardownObservers()
+        
+        // Remove remote command center targets
+        let commandCenter = MPRemoteCommandCenter.shared()
+        commandCenter.playCommand.removeTarget(nil)
+        commandCenter.pauseCommand.removeTarget(nil)
+        commandCenter.nextTrackCommand.removeTarget(nil)
+        commandCenter.previousTrackCommand.removeTarget(nil)
+        commandCenter.changePlaybackPositionCommand.removeTarget(nil)
+    }
+
     // MARK: - Public API
 
     func setQueue(items: [QueueItem], startIndex: Int?, startPositionSeconds: Double?, autoplay: Bool?) {
