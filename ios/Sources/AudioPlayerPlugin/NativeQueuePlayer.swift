@@ -2,6 +2,7 @@ import AVFoundation
 import Capacitor
 import Foundation
 import MediaPlayer
+import UIKit
 
 final class NativeQueuePlayer {
     private weak var plugin: AudioPlayerPlugin?
