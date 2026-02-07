@@ -793,7 +793,7 @@ final class NativeQueuePlayer {
         case .array(let a):
             return a.map { jsonValueToAny($0) }
         case .object(let o):
-            return jsonValueToAny(o)
+            return jsonValueDictToAny(o)
         }
     }
 

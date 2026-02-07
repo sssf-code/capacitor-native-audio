@@ -307,7 +307,7 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             
             // Parse extras if present
-            var extras: [String: JSONValue]? = nil
+            var extras: [String: JSONValue]?
             if let extrasObj = obj["extras"] as? [String: Any] {
                 do {
                     extras = try parseExtras(extrasObj)
