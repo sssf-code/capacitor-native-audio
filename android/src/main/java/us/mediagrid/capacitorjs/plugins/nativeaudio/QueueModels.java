@@ -9,6 +9,7 @@ import java.util.Iterator;
 import java.util.Map;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 /**
  * Data models mirroring {@code src/definitions.ts}.
@@ -29,6 +30,7 @@ final class QueueModels {
         final @Nullable Double duration;
         final @Nullable String metadataUpdateUrl;
         final @Nullable Integer metadataUpdateInterval;
+        final @Nullable JSONObject extras;
 
         QueueItem(
             String id,
@@ -39,7 +41,8 @@ final class QueueModels {
             @Nullable String artwork,
             @Nullable Double duration,
             @Nullable String metadataUpdateUrl,
-            @Nullable Integer metadataUpdateInterval
+            @Nullable Integer metadataUpdateInterval,
+            @Nullable JSONObject extras
         ) {
             this.id = id;
             this.src = src;
@@ -50,6 +53,7 @@ final class QueueModels {
             this.duration = duration;
             this.metadataUpdateUrl = metadataUpdateUrl;
             this.metadataUpdateInterval = metadataUpdateInterval;
+            this.extras = extras;
         }
 
         static QueueItem fromJson(JSONObject obj) throws JSONException {
@@ -64,7 +68,8 @@ final class QueueModels {
                 obj.optString("metadataUpdateUrl", null),
                 obj.has("metadataUpdateInterval") && !obj.isNull("metadataUpdateInterval")
                     ? obj.getInt("metadataUpdateInterval")
-                    : null
+                    : null,
+                obj.has("extras") && !obj.isNull("extras") ? obj.getJSONObject("extras") : null
             );
         }
 
@@ -79,6 +84,7 @@ final class QueueModels {
             if (duration != null) obj.put("duration", duration);
             if (metadataUpdateUrl != null) obj.put("metadataUpdateUrl", metadataUpdateUrl);
             if (metadataUpdateInterval != null) obj.put("metadataUpdateInterval", metadataUpdateInterval);
+            if (extras != null) obj.put("extras", extras);
             return obj;
         }
 
@@ -114,7 +120,8 @@ final class QueueModels {
                 artwork != null ? artwork : this.artwork,
                 duration,
                 metadataUpdateUrl,
-                metadataUpdateInterval
+                metadataUpdateInterval,
+                extras
             );
         }
     }

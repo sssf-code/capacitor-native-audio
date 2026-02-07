@@ -276,12 +276,50 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     private func parseQueueItems(_ call: CAPPluginCall) throws -> [QueueItem] {
         guard let arr = call.getArray("items") else { return [] }
         var out: [QueueItem] = []
-        for any in arr {
-            guard let obj = any as? [String: Any] else { continue }
-            guard let id = obj["id"] as? String,
-                  let src = obj["src"] as? String,
-                  let title = obj["title"] as? String
-            else { continue }
+        for (index, any) in arr.enumerated() {
+            guard let obj = any as? [String: Any] else {
+                throw NSError(
+                    domain: "AudioPlayerPlugin",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "Queue item at index \(index) is not an object"]
+                )
+            }
+            guard let id = obj["id"] as? String else {
+                throw NSError(
+                    domain: "AudioPlayerPlugin",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "Queue item at index \(index) is missing required field 'id'"]
+                )
+            }
+            guard let src = obj["src"] as? String else {
+                throw NSError(
+                    domain: "AudioPlayerPlugin",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "Queue item at index \(index) is missing required field 'src'"]
+                )
+            }
+            guard let title = obj["title"] as? String else {
+                throw NSError(
+                    domain: "AudioPlayerPlugin",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "Queue item at index \(index) is missing required field 'title'"]
+                )
+            }
+            
+            // Parse extras if present
+            var extras: [String: JSONValue]? = nil
+            if let extrasObj = obj["extras"] as? [String: Any] {
+                do {
+                    extras = try parseExtras(extrasObj)
+                } catch {
+                    throw NSError(
+                        domain: "AudioPlayerPlugin",
+                        code: 400,
+                        userInfo: [NSLocalizedDescriptionKey: "Queue item at index \(index) has invalid 'extras' field: \(error.localizedDescription)"]
+                    )
+                }
+            }
+            
             let item = QueueItem(
                 id: id,
                 src: src,
@@ -292,10 +330,47 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
                 duration: obj["duration"] as? Double,
                 metadataUpdateUrl: obj["metadataUpdateUrl"] as? String,
                 metadataUpdateInterval: obj["metadataUpdateInterval"] as? Int,
-                extras: nil
+                extras: extras
             )
             out.append(item)
         }
         return out
+    }
+    
+    private func parseExtras(_ obj: [String: Any]) throws -> [String: JSONValue] {
+        var result: [String: JSONValue] = [:]
+        for (key, value) in obj {
+            result[key] = try convertToJSONValue(value)
+        }
+        return result
+    }
+    
+    private func convertToJSONValue(_ value: Any) throws -> JSONValue {
+        if value is NSNull {
+            return .null
+        } else if let bool = value as? Bool {
+            return .bool(bool)
+        } else if let number = value as? Double {
+            return .number(number)
+        } else if let number = value as? Int {
+            return .number(Double(number))
+        } else if let string = value as? String {
+            return .string(string)
+        } else if let array = value as? [Any] {
+            let jsonArray = try array.map { try convertToJSONValue($0) }
+            return .array(jsonArray)
+        } else if let dict = value as? [String: Any] {
+            var jsonDict: [String: JSONValue] = [:]
+            for (k, v) in dict {
+                jsonDict[k] = try convertToJSONValue(v)
+            }
+            return .object(jsonDict)
+        } else {
+            throw NSError(
+                domain: "AudioPlayerPlugin",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "Unsupported type in extras: \(type(of: value))"]
+            )
+        }
     }
 }

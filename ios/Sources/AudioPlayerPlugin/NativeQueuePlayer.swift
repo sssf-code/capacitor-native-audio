@@ -768,7 +768,33 @@ final class NativeQueuePlayer {
         if let v = item.duration { obj["duration"] = v }
         if let v = item.metadataUpdateUrl { obj["metadataUpdateUrl"] = v }
         if let v = item.metadataUpdateInterval { obj["metadataUpdateInterval"] = v }
+        if let v = item.extras { obj["extras"] = jsonValueToAny(v) }
         return obj
+    }
+    
+    private func jsonValueToAny(_ dict: [String: JSONValue]) -> [String: Any] {
+        var result: [String: Any] = [:]
+        for (key, value) in dict {
+            result[key] = jsonValueToAny(value)
+        }
+        return result
+    }
+    
+    private func jsonValueToAny(_ value: JSONValue) -> Any {
+        switch value {
+        case .null:
+            return NSNull()
+        case .bool(let b):
+            return b
+        case .number(let n):
+            return n
+        case .string(let s):
+            return s
+        case .array(let a):
+            return a.map { jsonValueToAny($0) }
+        case .object(let o):
+            return jsonValueToAny(o)
+        }
     }
 
     private func stateToJS() -> [String: Any] {
