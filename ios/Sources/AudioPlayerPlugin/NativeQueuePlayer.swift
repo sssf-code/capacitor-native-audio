@@ -434,30 +434,97 @@ final class NativeQueuePlayer {
         shouldBumpQueueRevision: Bool
     ) {
         stopMetadataPolling()
-        queue = items
 
-        let resolvedIndex: Int = {
+        // Determine the desired original index based on the full logical items array.
+        let targetOriginalIndex: Int = {
             if let desiredItemId, let idx = items.firstIndex(where: { $0.id == desiredItemId }) {
                 return idx
             }
-            if let desiredIndex { return max(0, min(desiredIndex, max(0, items.count - 1))) }
+            if let desiredIndex {
+                return max(0, min(desiredIndex, max(0, items.count - 1)))
+            }
             return max(0, min(state.currentIndex, max(0, items.count - 1)))
         }()
 
+        // Resolve media URLs and build a filtered list of playable items, keeping track of original indices.
+        let resolvedTuples: [(originalIndex: Int, item: QueueItem, url: URL)] = items.enumerated().compactMap { (index, item) in
+            guard let url = resolveMediaUrl(item.src) else { return nil }
+            return (originalIndex: index, item: item, url: url)
+        }
+
+        // If nothing resolved, clear the queue and keep state consistent, then return.
+        if resolvedTuples.isEmpty {
+            queue = []
+
+            player.pause()
+            player.removeAllItems()
+            playerItemsByIndex = [:]
+
+            let desiredPos = max(0, desiredPositionSeconds ?? 0)
+            if desiredPos > 0 {
+                player.seek(to: CMTime(seconds: desiredPos, preferredTimescale: 600))
+            }
+
+            isStopped = true
+            state.status = .stopped
+            state.currentIndex = 0
+            state.currentItemId = nil
+            state.position = desiredPos
+            state.duration = nil
+
+            if shouldBumpQueueRevision { bumpQueueRevision() }
+            bumpStateRevision()
+            persist()
+
+            notifyQueueChange()
+            notifyTrackChange()
+            notifyStateChange()
+            refreshNowPlaying()
+
+            startMetadataPollingIfNeeded()
+            return
+        }
+
+        // Map original indices to new indices in the filtered list.
+        var originalToFilteredIndex: [Int: Int] = [:]
+        for (filteredIndex, tuple) in resolvedTuples.enumerated() {
+            originalToFilteredIndex[tuple.originalIndex] = filteredIndex
+        }
+
+        // Choose the actual resolved index within the filtered list, preferring the exact item,
+        // otherwise the next playable item after it, or the last playable item.
+        let resolvedIndex: Int = {
+            if let exact = originalToFilteredIndex[targetOriginalIndex] {
+                return exact
+            }
+            if let next = resolvedTuples.first(where: { $0.originalIndex > targetOriginalIndex }),
+               let idx = originalToFilteredIndex[next.originalIndex] {
+                return idx
+            }
+            // Fallback to last playable item.
+            if let lastOriginalIndex = resolvedTuples.last?.originalIndex,
+               let idx = originalToFilteredIndex[lastOriginalIndex] {
+                return idx
+            }
+            return 0
+        }()
+
+        // Update the logical queue to only include successfully resolved items.
+        queue = resolvedTuples.map { $0.item }
+
         state.currentIndex = resolvedIndex
-        state.currentItemId = items.indices.contains(resolvedIndex) ? items[resolvedIndex].id : nil
+        state.currentItemId = queue.indices.contains(resolvedIndex) ? queue[resolvedIndex].id : nil
 
         player.pause()
         player.removeAllItems()
         playerItemsByIndex = [:]
 
-        for (i, item) in items.enumerated() {
-            if let url = resolveMediaUrl(item.src) {
-                let avItem = AVPlayerItem(url: url)
-                avItem.audioTimePitchAlgorithm = .timeDomain
-                playerItemsByIndex[i] = avItem
-                player.insert(avItem, after: nil)
-            }
+        // Build the AVQueuePlayer queue from the filtered, resolvable items using their new indices.
+        for (i, tuple) in resolvedTuples.enumerated() {
+            let avItem = AVPlayerItem(url: tuple.url)
+            avItem.audioTimePitchAlgorithm = .timeDomain
+            playerItemsByIndex[i] = avItem
+            player.insert(avItem, after: nil)
         }
 
         // Seek to index by advancing the queue player (AVQueuePlayer doesn't expose random access well).
