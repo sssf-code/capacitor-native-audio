@@ -503,9 +503,9 @@ removeAllListeners() => Promise<void>
 | Prop                       | Type                     |
 | -------------------------- | ------------------------ |
 | **`items`**                | <code>QueueItem[]</code> |
-| **`startIndex`**           | <code>number</code>      |
-| **`startPositionSeconds`** | <code>number</code>      |
-| **`autoplay`**             | <code>boolean</code>     |
+| **`startIndex`**           | <code>number \| undefined</code>      |
+| **`startPositionSeconds`** | <code>number \| undefined</code>      |
+| **`autoplay`**             | <code>boolean \| undefined</code>     |
 
 
 #### QueueItem
@@ -515,13 +515,13 @@ removeAllListeners() => Promise<void>
 | **`id`**                     | <code>string</code>                                          | Stable identifier used for reconciliation and per-item bookmarks/progress. |
 | **`src`**                    | <code>string</code>                                          | Remote URL or app asset path (e.g. `assets/chapter01.mp3`).                |
 | **`title`**                  | <code>string</code>                                          | Display title for OS notification/lockscreen.                              |
-| **`artist`**                 | <code>string</code>                                          | Optional artist name.                                                      |
-| **`album`**                  | <code>string</code>                                          | Optional album/podcast/book name.                                          |
-| **`artwork`**                | <code>string</code>                                          | Artwork URL or app asset path.                                             |
-| **`duration`**               | <code>number</code>                                          | Optional duration in seconds (streams may be unknown).                     |
-| **`metadataUpdateUrl`**      | <code>string</code>                                          | Optional metadata update URL + interval (useful for streams/radio).        |
-| **`metadataUpdateInterval`** | <code>number</code>                                          |                                                                            |
-| **`extras`**                 | <code><a href="#record">Record</a>&lt;string, any&gt;</code> | Opaque app-defined data (not interpreted by native).                       |
+| **`artist`**                 | <code>string \| undefined</code>                                          | Optional artist name.                                                      |
+| **`album`**                  | <code>string \| undefined</code>                                          | Optional album/podcast/book name.                                          |
+| **`artwork`**                | <code>string \| undefined</code>                                          | Artwork URL or app asset path.                                             |
+| **`duration`**               | <code>number \| undefined</code>                                          | Optional duration in seconds (streams may be unknown).                     |
+| **`metadataUpdateUrl`**      | <code>string \| undefined</code>                                          | Optional metadata update URL + interval (useful for streams/radio).        |
+| **`metadataUpdateInterval`** | <code>number \| undefined</code>                                          |                                                                            |
+| **`extras`**                 | <code><a href="#record">Record</a>&lt;string, any&gt; \| undefined</code> | Opaque app-defined data (not interpreted by native).                       |
 
 
 #### SyncQueueResult
