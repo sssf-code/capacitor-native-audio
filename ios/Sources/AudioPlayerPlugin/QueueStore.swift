@@ -2,7 +2,7 @@ import Foundation
 
 final class QueueStore {
     private let defaults: UserDefaults
-    private let key = "SSFCapacitorNativeAudio.PersistedState.v1"
+    private let key = "SsfCapacitorNativeAudio.PersistedState.v1"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

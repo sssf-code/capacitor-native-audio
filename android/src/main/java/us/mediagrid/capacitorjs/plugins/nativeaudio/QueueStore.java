@@ -7,7 +7,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 final class QueueStore {
-    private static final String PREFS = "SSFCapacitorNativeAudio";
+    private static final String PREFS = "SsfCapacitorNativeAudio";
     private static final String KEY = "persisted_state_v1";
     static final int SCHEMA_VERSION = 1;
 

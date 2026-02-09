@@ -12,7 +12,8 @@
         "dist/",
         "ios/Sources",
         "ios/Tests",
-        "Package.swift"
+        "Package.swift",
+        "SsfCapacitorNativeAudio.podspec"
     ],
     "author": "Tom Westrick",
     "license": "MIT",
