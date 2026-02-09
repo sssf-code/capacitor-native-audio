@@ -1,4 +1,4 @@
-# @mediagrid/capacitor-native-audio
+# @ssf/capacitor-native-audio
 
 ## Description
 
@@ -14,14 +14,7 @@ Unified **native queue player** (playlist + media session) for Capacitor apps.
 ### For Capacitor 8
 
 ```bash
-npm install @mediagrid/capacitor-native-audio
-npx cap sync
-```
-
-### For Capacitor 7
-
-```bash
-npm install @mediagrid/capacitor-native-audio@^2.0.0
+pnpm add github:sssf-code/capacitor-native-audio#queue2
 npx cap sync
 ```
 
@@ -37,7 +30,7 @@ Located at `android/app/src/main/AndroidManifest.xml`
 
     <!-- Add service used for background play -->
     <service
-        android:name="us.mediagrid.capacitorjs.plugins.nativeaudio.AudioPlayerService"
+        android:name="ssf.capacitorjs.plugins.nativeaudio.AudioPlayerService"
         android:description="@string/audio_player_service_description"
         android:foregroundServiceType="mediaPlayback"
         android:exported="true">
@@ -713,7 +706,9 @@ removeAllListeners() => Promise<void>
 
 Construct a type with a set of properties K of type T
 
-<code>{ [P in K]: T; }</code>
+<code>{
+ [P in K]: T;
+ }</code>
 
 
 #### SyncQueueMode
@@ -735,6 +730,8 @@ Construct a type with a set of properties K of type T
 
 Make all properties in T optional
 
-<code>{ [P in keyof T]?: T[P]; }</code>
+<code>{
+ [P in keyof T]?: T[P];
+ }</code>
 
 </docgen-api>
