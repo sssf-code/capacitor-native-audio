@@ -172,8 +172,7 @@ export interface SetItemProgressParams {
 export interface GetItemProgressParams {
     itemId: string;
 }
-export interface SetPlaybackOptionsParams extends Partial<PlaybackOptions> {
-}
+export type SetPlaybackOptionsParams = Partial<PlaybackOptions>;
 export interface SetRepeatModeParams {
     repeatMode: RepeatMode;
 }
@@ -194,8 +193,7 @@ export interface TrackChangeEvent {
     currentIndex: number;
     item: QueueItem;
 }
-export interface QueueChangeEvent extends GetQueueResult {
-}
+export type QueueChangeEvent = GetQueueResult;
 export interface MetadataChangeEvent {
     stateRevision: number;
     itemId: string;

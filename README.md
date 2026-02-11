@@ -371,9 +371,9 @@ getItemProgress(params: GetItemProgressParams) => Promise<ItemProgress>
 setPlaybackOptions(params: SetPlaybackOptionsParams) => Promise<void>
 ```
 
-| Param        | Type                                                                          |
-| ------------ | ----------------------------------------------------------------------------- |
-| **`params`** | <code><a href="#setplaybackoptionsparams">SetPlaybackOptionsParams</a></code> |
+| Param        | Type                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| **`params`** | <code><a href="#partial">Partial</a>&lt;<a href="#playbackoptions">PlaybackOptions</a>&gt;</code> |
 
 --------------------
 
@@ -453,10 +453,10 @@ addListener(eventName: 'trackChange', listenerFunc: (event: TrackChangeEvent) =>
 addListener(eventName: 'queueChange', listenerFunc: (event: QueueChangeEvent) => void) => Promise<PluginListenerHandle>
 ```
 
-| Param              | Type                                                                              |
-| ------------------ | --------------------------------------------------------------------------------- |
-| **`eventName`**    | <code>'queueChange'</code>                                                        |
-| **`listenerFunc`** | <code>(event: <a href="#queuechangeevent">QueueChangeEvent</a>) =&gt; void</code> |
+| Param              | Type                                                                          |
+| ------------------ | ----------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'queueChange'</code>                                                    |
+| **`listenerFunc`** | <code>(event: <a href="#getqueueresult">GetQueueResult</a>) =&gt; void</code> |
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
@@ -641,9 +641,6 @@ removeAllListeners() => Promise<void>
 | **`itemId`** | <code>string</code> |
 
 
-#### SetPlaybackOptionsParams
-
-
 #### PlaybackOptions
 
 | Prop                               | Type                 | Description                                                                                                                              | Default           |
@@ -688,9 +685,6 @@ removeAllListeners() => Promise<void>
 | **`item`**          | <code><a href="#queueitem">QueueItem</a></code> |
 
 
-#### QueueChangeEvent
-
-
 #### MetadataChangeEvent
 
 | Prop                | Type                                                                                  |
@@ -725,10 +719,20 @@ Construct a type with a set of properties K of type T
 <code>'off' | 'one' | 'all'</code>
 
 
+#### SetPlaybackOptionsParams
+
+<code><a href="#partial">Partial</a>&lt;<a href="#playbackoptions">PlaybackOptions</a>&gt;</code>
+
+
 #### Partial
 
 Make all properties in T optional
 
 <code>{ [P in keyof T]?: T[P]; }</code>
+
+
+#### QueueChangeEvent
+
+<code><a href="#getqueueresult">GetQueueResult</a></code>
 
 </docgen-api>

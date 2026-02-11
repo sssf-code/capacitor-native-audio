@@ -296,7 +296,7 @@
           {
             "name": "params",
             "docs": "",
-            "type": "SetPlaybackOptionsParams"
+            "type": "Partial<PlaybackOptions>"
           }
         ],
         "returns": "Promise<void>",
@@ -415,7 +415,7 @@
           {
             "name": "listenerFunc",
             "docs": "",
-            "type": "(event: QueueChangeEvent) => void"
+            "type": "(event: GetQueueResult) => void"
           }
         ],
         "returns": "Promise<PluginListenerHandle>",
@@ -1002,14 +1002,6 @@
       ]
     },
     {
-      "name": "SetPlaybackOptionsParams",
-      "slug": "setplaybackoptionsparams",
-      "docs": "",
-      "tags": [],
-      "methods": [],
-      "properties": []
-    },
-    {
       "name": "PlaybackOptions",
       "slug": "playbackoptions",
       "docs": "",
@@ -1192,14 +1184,6 @@
       ]
     },
     {
-      "name": "QueueChangeEvent",
-      "slug": "queuechangeevent",
-      "docs": "",
-      "tags": [],
-      "methods": [],
-      "properties": []
-    },
-    {
       "name": "MetadataChangeEvent",
       "slug": "metadatachangeevent",
       "docs": "",
@@ -1303,6 +1287,20 @@
       ]
     },
     {
+      "name": "SetPlaybackOptionsParams",
+      "slug": "setplaybackoptionsparams",
+      "docs": "",
+      "types": [
+        {
+          "text": "Partial<PlaybackOptions>",
+          "complexTypes": [
+            "Partial",
+            "PlaybackOptions"
+          ]
+        }
+      ]
+    },
+    {
       "name": "Partial",
       "slug": "partial",
       "docs": "Make all properties in T optional",
@@ -1312,6 +1310,19 @@
           "complexTypes": [
             "T",
             "P"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "QueueChangeEvent",
+      "slug": "queuechangeevent",
+      "docs": "",
+      "types": [
+        {
+          "text": "GetQueueResult",
+          "complexTypes": [
+            "GetQueueResult"
           ]
         }
       ]
