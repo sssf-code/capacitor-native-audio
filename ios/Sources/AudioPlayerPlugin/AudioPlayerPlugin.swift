@@ -238,6 +238,7 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         if let v = call.getDouble("skipBackwardSeconds") { updated.skipBackwardSeconds = v }
         if let v = call.getBool("enableNextPrev") { updated.enableNextPrev = v }
         if let v = call.getBool("enableSeekTo") { updated.enableSeekTo = v }
+        if let v = call.getBool("enableSkipForwardBackward") { updated.enableSkipForwardBackward = v }
         if let v = call.getBool("enableStop") { updated.enableStop = v }
         if let v = call.getString("androidNotificationSmallIcon") { updated.androidNotificationSmallIcon = v }
         qp.setPlaybackOptions(updated)
@@ -252,6 +253,7 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
             "skipBackwardSeconds": qp.options.skipBackwardSeconds,
             "enableNextPrev": qp.options.enableNextPrev,
             "enableSeekTo": qp.options.enableSeekTo,
+            "enableSkipForwardBackward": qp.options.enableSkipForwardBackward,
             "enableStop": qp.options.enableStop,
             "androidNotificationSmallIcon": qp.options.androidNotificationSmallIcon as Any
         ])

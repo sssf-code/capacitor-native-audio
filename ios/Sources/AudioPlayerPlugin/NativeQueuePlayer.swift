@@ -861,8 +861,8 @@ final class NativeQueuePlayer {
         commandCenter.nextTrackCommand.isEnabled = canNext
         commandCenter.previousTrackCommand.isEnabled = canPrev
         commandCenter.changePlaybackPositionCommand.isEnabled = options.enableSeekTo && (state.duration ?? 0) > 0
-        commandCenter.skipForwardCommand.isEnabled = options.enableSeekTo
-        commandCenter.skipBackwardCommand.isEnabled = options.enableSeekTo
+        commandCenter.skipForwardCommand.isEnabled = options.enableSkipForwardBackward
+        commandCenter.skipBackwardCommand.isEnabled = options.enableSkipForwardBackward
         commandCenter.stopCommand.isEnabled = options.enableStop
 
         commandCenter.skipForwardCommand.preferredIntervals = [NSNumber(value: options.skipForwardSeconds)]

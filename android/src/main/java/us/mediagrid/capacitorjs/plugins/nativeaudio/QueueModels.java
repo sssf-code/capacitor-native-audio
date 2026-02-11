@@ -140,6 +140,7 @@ final class QueueModels {
         int skipBackwardSeconds = 10;
         boolean enableNextPrev = true;
         boolean enableSeekTo = true;
+        boolean enableSkipForwardBackward = true;
         boolean enableStop = true;
         @Nullable String androidNotificationSmallIcon = null;
 
@@ -155,6 +156,7 @@ final class QueueModels {
             if (obj.has("skipBackwardSeconds")) out.skipBackwardSeconds = obj.optInt("skipBackwardSeconds", out.skipBackwardSeconds);
             if (obj.has("enableNextPrev")) out.enableNextPrev = obj.optBoolean("enableNextPrev", out.enableNextPrev);
             if (obj.has("enableSeekTo")) out.enableSeekTo = obj.optBoolean("enableSeekTo", out.enableSeekTo);
+            if (obj.has("enableSkipForwardBackward")) out.enableSkipForwardBackward = obj.optBoolean("enableSkipForwardBackward", out.enableSkipForwardBackward);
             if (obj.has("enableStop")) out.enableStop = obj.optBoolean("enableStop", out.enableStop);
             if (obj.has("androidNotificationSmallIcon")) out.androidNotificationSmallIcon = obj.optString("androidNotificationSmallIcon", null);
             return out;
@@ -167,6 +169,7 @@ final class QueueModels {
             obj.put("skipBackwardSeconds", skipBackwardSeconds);
             obj.put("enableNextPrev", enableNextPrev);
             obj.put("enableSeekTo", enableSeekTo);
+            obj.put("enableSkipForwardBackward", enableSkipForwardBackward);
             obj.put("enableStop", enableStop);
             if (androidNotificationSmallIcon != null) obj.put("androidNotificationSmallIcon", androidNotificationSmallIcon);
             return obj;

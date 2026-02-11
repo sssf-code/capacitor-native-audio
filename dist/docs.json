@@ -1077,6 +1077,18 @@
           "type": "boolean"
         },
         {
+          "name": "enableSkipForwardBackward",
+          "tags": [
+            {
+              "text": "true",
+              "name": "default"
+            }
+          ],
+          "docs": "Whether to expose skip forward/backward buttons (seek by interval).\nWhen false, scrubbing (grabber) still works if enableSeekTo is true.",
+          "complexTypes": [],
+          "type": "boolean | undefined"
+        },
+        {
           "name": "enableStop",
           "tags": [
             {

@@ -90,6 +90,7 @@ struct PlaybackOptions: Codable, Equatable {
     var skipBackwardSeconds: Double = 10
     var enableNextPrev: Bool = true
     var enableSeekTo: Bool = true
+    var enableSkipForwardBackward: Bool = true
     var enableStop: Bool = true
     var androidNotificationSmallIcon: String? = nil
 }

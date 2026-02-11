@@ -80,6 +80,13 @@ export interface PlaybackOptions {
      */
     enableSeekTo: boolean;
     /**
+     * Whether to expose skip forward/backward buttons (seek by interval).
+     * When false, scrubbing (grabber) still works if enableSeekTo is true.
+     *
+     * @default true
+     */
+    enableSkipForwardBackward?: boolean;
+    /**
      * Whether to expose stop controls in OS UIs when possible.
      *
      * @default true

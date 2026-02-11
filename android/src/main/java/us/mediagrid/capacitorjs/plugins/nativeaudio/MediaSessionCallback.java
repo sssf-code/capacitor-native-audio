@@ -58,6 +58,8 @@ public class MediaSessionCallback implements MediaSession.Callback {
             if (!opts.enableNextPrev) {
                 cmds.remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM);
                 cmds.remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM);
+            }
+            if (!opts.enableSkipForwardBackward) {
                 cmds.remove(Player.COMMAND_SEEK_TO_NEXT);
                 cmds.remove(Player.COMMAND_SEEK_TO_PREVIOUS);
             }

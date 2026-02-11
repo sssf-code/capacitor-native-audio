@@ -646,15 +646,16 @@ removeAllListeners() => Promise<void>
 
 #### PlaybackOptions
 
-| Prop                               | Type                 | Description                                                                                                           | Default           |
-| ---------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| **`previousThresholdSeconds`**     | <code>number</code>  | When user presses previous: if current position is above this threshold, seek to 0 instead of going to previous item. | <code>7</code>    |
-| **`skipForwardSeconds`**           | <code>number</code>  | OS skip buttons (seek +/- fixed seconds) configuration.                                                               | <code>10</code>   |
-| **`skipBackwardSeconds`**          | <code>number</code>  | OS skip buttons (seek +/- fixed seconds) configuration.                                                               | <code>10</code>   |
-| **`enableNextPrev`**               | <code>boolean</code> | Whether to expose next/previous track controls in OS UIs when possible.                                               | <code>true</code> |
-| **`enableSeekTo`**                 | <code>boolean</code> | Whether to expose scrubbing (seek-to) controls in OS UIs when possible.                                               | <code>true</code> |
-| **`enableStop`**                   | <code>boolean</code> | Whether to expose stop controls in OS UIs when possible.                                                              | <code>true</code> |
-| **`androidNotificationSmallIcon`** | <code>string</code>  | Android-only: override the drawable name for the notification small icon. (No extension, no `R.drawable.` prefix.)    |                   |
+| Prop                               | Type                 | Description                                                                                                                              | Default           |
+| ---------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| **`previousThresholdSeconds`**     | <code>number</code>  | When user presses previous: if current position is above this threshold, seek to 0 instead of going to previous item.                    | <code>7</code>    |
+| **`skipForwardSeconds`**           | <code>number</code>  | OS skip buttons (seek +/- fixed seconds) configuration.                                                                                  | <code>10</code>   |
+| **`skipBackwardSeconds`**          | <code>number</code>  | OS skip buttons (seek +/- fixed seconds) configuration.                                                                                  | <code>10</code>   |
+| **`enableNextPrev`**               | <code>boolean</code> | Whether to expose next/previous track controls in OS UIs when possible.                                                                  | <code>true</code> |
+| **`enableSeekTo`**                 | <code>boolean</code> | Whether to expose scrubbing (seek-to) controls in OS UIs when possible.                                                                  | <code>true</code> |
+| **`enableSkipForwardBackward`**    | <code>boolean</code> | Whether to expose skip forward/backward buttons (seek by interval). When false, scrubbing (grabber) still works if enableSeekTo is true. | <code>true</code> |
+| **`enableStop`**                   | <code>boolean</code> | Whether to expose stop controls in OS UIs when possible.                                                                                 | <code>true</code> |
+| **`androidNotificationSmallIcon`** | <code>string</code>  | Android-only: override the drawable name for the notification small icon. (No extension, no `R.drawable.` prefix.)                       |                   |
 
 
 #### SetRepeatModeParams
@@ -706,9 +707,7 @@ removeAllListeners() => Promise<void>
 
 Construct a type with a set of properties K of type T
 
-<code>{
- [P in K]: T;
- }</code>
+<code>{ [P in K]: T; }</code>
 
 
 #### SyncQueueMode
@@ -730,8 +729,6 @@ Construct a type with a set of properties K of type T
 
 Make all properties in T optional
 
-<code>{
- [P in keyof T]?: T[P];
- }</code>
+<code>{ [P in keyof T]?: T[P]; }</code>
 
 </docgen-api>
