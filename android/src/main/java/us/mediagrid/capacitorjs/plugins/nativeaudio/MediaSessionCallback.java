@@ -13,6 +13,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import org.json.JSONObject;
 
 public class MediaSessionCallback implements MediaSession.Callback {
+
     private final QueuePlayer queuePlayer;
 
     public MediaSessionCallback(QueuePlayer queuePlayer) {
@@ -25,49 +26,47 @@ public class MediaSessionCallback implements MediaSession.Callback {
         MediaSession session,
         MediaSession.ControllerInfo controller
     ) {
-        SessionCommands sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
-            .buildUpon()
-            .add(new SessionCommand(QueuePlayer.CMD_SET_QUEUE, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_SYNC_QUEUE, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_GET_QUEUE, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_ADD_ITEMS, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_REMOVE_ITEM, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_MOVE_ITEM, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_CLEAR_QUEUE, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_GET_STATE, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_SET_PROGRESS, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_GET_PROGRESS, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_SET_OPTIONS, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_GET_OPTIONS, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_SET_VOLUME, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_SET_RATE, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_SET_REPEAT_MODE, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_SET_SHUFFLE, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_SKIP_TO_PREVIOUS, Bundle.EMPTY))
-            .add(new SessionCommand(QueuePlayer.CMD_SKIP_TO_INDEX, Bundle.EMPTY))
-            .build();
+        SessionCommands sessionCommands =
+            MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                .add(new SessionCommand(QueuePlayer.CMD_SET_QUEUE, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_SYNC_QUEUE, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_GET_QUEUE, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_ADD_ITEMS, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_REMOVE_ITEM, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_MOVE_ITEM, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_CLEAR_QUEUE, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_GET_STATE, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_SET_PROGRESS, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_GET_PROGRESS, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_SET_OPTIONS, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_GET_OPTIONS, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_SET_VOLUME, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_SET_RATE, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_SET_REPEAT_MODE, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_SET_SHUFFLE, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_SKIP_TO_PREVIOUS, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_SKIP_TO_NEXT, Bundle.EMPTY))
+                .add(new SessionCommand(QueuePlayer.CMD_SKIP_TO_INDEX, Bundle.EMPTY))
+                .build();
 
         MediaSession.ConnectionResult.AcceptedResultBuilder builder =
-            new MediaSession.ConnectionResult.AcceptedResultBuilder(session).setAvailableSessionCommands(sessionCommands);
+            new MediaSession.ConnectionResult.AcceptedResultBuilder(
+                session
+            ).setAvailableSessionCommands(sessionCommands);
 
-        // Action enablement (best-effort) based on playback options.
         try {
-            Player.Commands.Builder cmds = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon();
+            Player.Commands.Builder cmds = new Player.Commands.Builder()
+                .add(Player.COMMAND_GET_CURRENT_MEDIA_ITEM)
+                .add(Player.COMMAND_GET_TIMELINE)
+                .add(Player.COMMAND_GET_METADATA)
+                .add(Player.COMMAND_PLAY_PAUSE);
             QueueModels.PlaybackOptions opts = queuePlayer.getOptionsSnapshot();
 
-            if (!opts.enableNextPrev) {
-                cmds.remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM);
-                cmds.remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM);
+            if (opts.enableSeekTo) {
+                cmds.add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM);
             }
-            if (!opts.enableSkipForwardBackward) {
-                cmds.remove(Player.COMMAND_SEEK_TO_NEXT);
-                cmds.remove(Player.COMMAND_SEEK_TO_PREVIOUS);
-            }
-            if (!opts.enableSeekTo) {
-                cmds.remove(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM);
-            }
-            if (!opts.enableStop) {
-                cmds.remove(Player.COMMAND_STOP);
+            if (opts.enableStop) {
+                cmds.add(Player.COMMAND_STOP);
             }
 
             builder.setAvailablePlayerCommands(cmds.build());

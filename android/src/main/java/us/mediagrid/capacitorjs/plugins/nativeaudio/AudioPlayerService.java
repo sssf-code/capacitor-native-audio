@@ -1,20 +1,25 @@
 package ssf.capacitorjs.plugins.nativeaudio;
 
-import android.app.PendingIntent;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.res.AssetManager;
 import android.os.Build;
+import android.os.Bundle;
 import android.util.Log;
 import androidx.annotation.Nullable;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.Player;
+import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.session.CommandButton;
 import androidx.media3.session.DefaultMediaNotificationProvider;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
+import androidx.media3.session.SessionCommand;
+import com.google.common.collect.ImmutableList;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -57,10 +62,15 @@ public class AudioPlayerService extends MediaSessionService {
         player.setPlayWhenReady(false);
 
         queuePlayer = new QueuePlayer(this, player);
-        mediaSession = new MediaSession.Builder(this, player)
+        Player sessionPlayer = buildSessionPlayer(player);
+        ImmutableList<CommandButton> customLayout = buildPrevNextLayout();
+        MediaSession.Builder sessionBuilder = new MediaSession.Builder(this, sessionPlayer)
             .setCallback(new MediaSessionCallback(queuePlayer))
-            .setSessionActivity(sessionActivityPendingIntent)
-            .build();
+            .setSessionActivity(sessionActivityPendingIntent);
+        if (!customLayout.isEmpty()) {
+            sessionBuilder.setCustomLayout(customLayout);
+        }
+        mediaSession = sessionBuilder.build();
 
         DefaultMediaNotificationProvider provider = new DefaultMediaNotificationProvider(this);
         int iconResId = queuePlayer.getResolvedNotificationSmallIconResId();
@@ -108,6 +118,76 @@ public class AudioPlayerService extends MediaSessionService {
         super.onDestroy();
     }
 
+    @UnstableApi
+    private Player buildSessionPlayer(ExoPlayer player) {
+        if (!queuePlayer.getOptionsSnapshot().enableNextPrev) {
+            return player;
+        }
+        return new androidx.media3.common.ForwardingPlayer(player) {
+            @Override
+            public Player.Commands getAvailableCommands() {
+                return super
+                    .getAvailableCommands()
+                    .buildUpon()
+                    .remove(Player.COMMAND_SEEK_TO_NEXT)
+                    .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    .build();
+            }
+
+            @Override
+            public boolean isCommandAvailable(int command) {
+                if (
+                    command == Player.COMMAND_SEEK_TO_NEXT ||
+                    command == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM ||
+                    command == Player.COMMAND_SEEK_TO_PREVIOUS ||
+                    command == Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
+                ) {
+                    return false;
+                }
+                return super.isCommandAvailable(command);
+            }
+        };
+    }
+
+    @UnstableApi
+    private ImmutableList<CommandButton> buildPrevNextLayout() {
+        if (!queuePlayer.getOptionsSnapshot().enableNextPrev) {
+            return ImmutableList.of();
+        }
+        int prevIcon = getDrawableResId(
+            "ic_skip_previous",
+            getDrawableResId("ic_media_previous", android.R.drawable.ic_media_previous)
+        );
+        int nextIcon = getDrawableResId(
+            "ic_skip_next",
+            getDrawableResId("ic_media_next", android.R.drawable.ic_media_next)
+        );
+        return ImmutableList.of(
+            new CommandButton.Builder()
+                .setDisplayName("Previous")
+                .setIconResId(prevIcon)
+                .setSessionCommand(
+                    new SessionCommand(QueuePlayer.CMD_SKIP_TO_PREVIOUS, Bundle.EMPTY)
+                )
+                .build(),
+            new CommandButton.Builder()
+                .setDisplayName("Next")
+                .setIconResId(nextIcon)
+                .setSessionCommand(new SessionCommand(QueuePlayer.CMD_SKIP_TO_NEXT, Bundle.EMPTY))
+                .build()
+        );
+    }
+
+    private int getDrawableResId(String name, int fallback) {
+        try {
+            int id = getResources().getIdentifier(name, "drawable", getPackageName());
+            if (id != 0) return id;
+        } catch (Exception ignored) {}
+        return fallback;
+    }
+
     private void createNotificationChannelIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
@@ -120,7 +200,9 @@ public class AudioPlayerService extends MediaSessionService {
         nm.createNotificationChannel(channel);
     }
 
-    private void tryApplyNotificationPoliciesFromCapacitorConfig(DefaultMediaNotificationProvider provider) {
+    private void tryApplyNotificationPoliciesFromCapacitorConfig(
+        DefaultMediaNotificationProvider provider
+    ) {
         try {
             JSONObject cfg = readAudioPlayerPluginConfig();
             if (cfg == null) return;
@@ -139,7 +221,10 @@ public class AudioPlayerService extends MediaSessionService {
                 long ms = Math.max(0, cfg.optLong("foregroundServiceTimeoutMs", 0));
                 // Signature changed across Media3 versions; try both.
                 try {
-                    provider.getClass().getMethod("setForegroundServiceTimeoutMs", long.class).invoke(provider, ms);
+                    provider
+                        .getClass()
+                        .getMethod("setForegroundServiceTimeoutMs", long.class)
+                        .invoke(provider, ms);
                 } catch (Exception ignored) {}
                 try {
                     provider

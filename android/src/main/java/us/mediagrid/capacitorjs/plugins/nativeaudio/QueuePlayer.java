@@ -31,6 +31,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 final class QueuePlayer implements Player.Listener {
+
     private static final String TAG = "QueuePlayer";
 
     // Custom commands (plugin -> service)
@@ -51,6 +52,7 @@ final class QueuePlayer implements Player.Listener {
     static final String CMD_SET_REPEAT_MODE = "mg.audio.setRepeatMode";
     static final String CMD_SET_SHUFFLE = "mg.audio.setShuffle";
     static final String CMD_SKIP_TO_PREVIOUS = "mg.audio.skipToPrevious";
+    static final String CMD_SKIP_TO_NEXT = "mg.audio.skipToNext";
     static final String CMD_SKIP_TO_INDEX = "mg.audio.skipToIndex";
 
     private final Context context;
@@ -71,11 +73,13 @@ final class QueuePlayer implements Player.Listener {
     private boolean isRestoring = false;
     private boolean isStopped = true;
 
-    private final ScheduledExecutorService metadataScheduler = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService metadataScheduler =
+        Executors.newSingleThreadScheduledExecutor();
     private @Nullable ScheduledFuture<?> metadataTask;
     private @Nullable String lastMetadataFingerprint;
 
-    private final ScheduledExecutorService progressScheduler = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService progressScheduler =
+        Executors.newSingleThreadScheduledExecutor();
     private @Nullable ScheduledFuture<?> progressTask;
     private @Nullable String lastProgressItemId;
     private long lastProgressPositionMs = 0;
@@ -128,9 +132,13 @@ final class QueuePlayer implements Player.Listener {
         if (name == null || name.trim().isEmpty()) {
             name = "ic_media_play";
         }
-        int resId = context.getResources().getIdentifier(name, "drawable", context.getPackageName());
+        int resId = context
+            .getResources()
+            .getIdentifier(name, "drawable", context.getPackageName());
         if (resId == 0) {
-            resId = context.getResources().getIdentifier("ic_media_play", "drawable", context.getPackageName());
+            resId = context
+                .getResources()
+                .getIdentifier("ic_media_play", "drawable", context.getPackageName());
         }
         if (resId == 0) {
             resId = context.getApplicationInfo().icon;
@@ -140,7 +148,11 @@ final class QueuePlayer implements Player.Listener {
 
     // MARK: - Custom command handler (MediaSessionCallback delegates here)
 
-    ListenableFuture<SessionResult> handleCustomCommand(MediaSession session, SessionCommand cmd, JSONObject args) {
+    ListenableFuture<SessionResult> handleCustomCommand(
+        MediaSession session,
+        SessionCommand cmd,
+        JSONObject args
+    ) {
         try {
             String action = cmd.customAction;
             if (CMD_SET_QUEUE.equals(action)) {
@@ -148,9 +160,10 @@ final class QueuePlayer implements Player.Listener {
                 return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
             }
             if (CMD_SYNC_QUEUE.equals(action)) {
-                long expected = args != null && args.has("expectedQueueRevision")
-                    ? args.optLong("expectedQueueRevision", -1)
-                    : -1;
+                long expected =
+                    args != null && args.has("expectedQueueRevision")
+                        ? args.optLong("expectedQueueRevision", -1)
+                        : -1;
                 boolean force = args != null && args.optBoolean("force", false);
                 if (expected != -1 && expected != queueRevision && !force) {
                     BundleJson bundle = new BundleJson();
@@ -163,12 +176,16 @@ final class QueuePlayer implements Player.Listener {
                 setQueueFromArgs(args);
                 BundleJson bundle = new BundleJson();
                 bundle.putLong("queueRevision", queueRevision);
-                return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle()));
+                return Futures.immediateFuture(
+                    new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle())
+                );
             }
             if (CMD_GET_QUEUE.equals(action)) {
                 BundleJson bundle = new BundleJson();
                 bundle.putJSONObject("queue", getQueueJson());
-                return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle()));
+                return Futures.immediateFuture(
+                    new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle())
+                );
             }
             if (CMD_ADD_ITEMS.equals(action)) {
                 addItemsFromArgs(args);
@@ -189,7 +206,9 @@ final class QueuePlayer implements Player.Listener {
             if (CMD_GET_STATE.equals(action)) {
                 BundleJson bundle = new BundleJson();
                 bundle.putJSONObject("state", getStateJson());
-                return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle()));
+                return Futures.immediateFuture(
+                    new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle())
+                );
             }
             if (CMD_SET_PROGRESS.equals(action)) {
                 setProgressFromArgs(args);
@@ -198,7 +217,9 @@ final class QueuePlayer implements Player.Listener {
             if (CMD_GET_PROGRESS.equals(action)) {
                 BundleJson bundle = new BundleJson();
                 bundle.putJSONObject("progress", getProgressFromArgs(args));
-                return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle()));
+                return Futures.immediateFuture(
+                    new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle())
+                );
             }
             if (CMD_SET_OPTIONS.equals(action)) {
                 setOptionsFromArgs(args);
@@ -207,7 +228,9 @@ final class QueuePlayer implements Player.Listener {
             if (CMD_GET_OPTIONS.equals(action)) {
                 BundleJson bundle = new BundleJson();
                 bundle.putJSONObject("options", getOptionsJson());
-                return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle()));
+                return Futures.immediateFuture(
+                    new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle())
+                );
             }
             if (CMD_SET_VOLUME.equals(action)) {
                 double vol = args != null ? args.optDouble("volume", 100.0) : 100.0;
@@ -233,9 +256,19 @@ final class QueuePlayer implements Player.Listener {
                 skipToPreviousWithThreshold();
                 return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
             }
+            if (CMD_SKIP_TO_NEXT.equals(action)) {
+                if (player.hasNextMediaItem()) {
+                    player.seekToNextMediaItem();
+                    isStopped = false;
+                }
+                bumpStateRevision();
+                persist();
+                return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
+            }
             if (CMD_SKIP_TO_INDEX.equals(action)) {
                 int index = args != null ? args.optInt("index", C.INDEX_UNSET) : C.INDEX_UNSET;
-                long posMs = args != null ? (long) (args.optDouble("positionSeconds", 0) * 1000) : 0;
+                long posMs =
+                    args != null ? (long) (args.optDouble("positionSeconds", 0) * 1000) : 0;
                 if (index != C.INDEX_UNSET) {
                     player.seekTo(index, posMs);
                     isStopped = false;
@@ -256,7 +289,8 @@ final class QueuePlayer implements Player.Listener {
         JSONArray arr = args != null ? args.optJSONArray("items") : null;
         List<QueueModels.QueueItem> items = parseItems(arr);
         String mode = args != null ? args.optString("mode", "replace") : "replace";
-        boolean hasExplicitStart = args != null && (args.has("startIndex") || args.has("startPositionSeconds"));
+        boolean hasExplicitStart =
+            args != null && (args.has("startIndex") || args.has("startPositionSeconds"));
         int startIndex = args != null && args.has("startIndex") ? args.optInt("startIndex", 0) : 0;
         double startPosSeconds = args != null ? args.optDouble("startPositionSeconds", 0) : 0;
         boolean autoplay = args != null && args.optBoolean("autoplay", false);
@@ -297,11 +331,20 @@ final class QueuePlayer implements Player.Listener {
     private void addItemsFromArgs(JSONObject args) throws JSONException {
         JSONArray arr = args != null ? args.optJSONArray("items") : null;
         List<QueueModels.QueueItem> items = parseItems(arr);
-        int atIndex = args != null && args.has("atIndex") ? args.optInt("atIndex", queue.size()) : queue.size();
+        int atIndex =
+            args != null && args.has("atIndex")
+                ? args.optInt("atIndex", queue.size())
+                : queue.size();
         int insertion = Math.max(0, Math.min(atIndex, queue.size()));
         List<QueueModels.QueueItem> updated = new ArrayList<>(queue);
         updated.addAll(insertion, items);
-        rebuildQueue(updated, getCurrentItemId(), player.getCurrentMediaItemIndex(), player.getCurrentPosition() / 1000.0, true);
+        rebuildQueue(
+            updated,
+            getCurrentItemId(),
+            player.getCurrentMediaItemIndex(),
+            player.getCurrentPosition() / 1000.0,
+            true
+        );
     }
 
     private void removeItemFromArgs(JSONObject args) {
@@ -311,7 +354,13 @@ final class QueuePlayer implements Player.Listener {
         for (QueueModels.QueueItem qi : queue) {
             if (!itemId.equals(qi.id)) updated.add(qi);
         }
-        rebuildQueue(updated, getCurrentItemId(), player.getCurrentMediaItemIndex(), player.getCurrentPosition() / 1000.0, true);
+        rebuildQueue(
+            updated,
+            getCurrentItemId(),
+            player.getCurrentMediaItemIndex(),
+            player.getCurrentPosition() / 1000.0,
+            true
+        );
     }
 
     private void moveItemFromArgs(JSONObject args) {
@@ -322,7 +371,13 @@ final class QueuePlayer implements Player.Listener {
         QueueModels.QueueItem item = updated.remove(fromIndex);
         int insertion = Math.max(0, Math.min(toIndex, updated.size()));
         updated.add(insertion, item);
-        rebuildQueue(updated, getCurrentItemId(), player.getCurrentMediaItemIndex(), player.getCurrentPosition() / 1000.0, true);
+        rebuildQueue(
+            updated,
+            getCurrentItemId(),
+            player.getCurrentMediaItemIndex(),
+            player.getCurrentPosition() / 1000.0,
+            true
+        );
     }
 
     private void rebuildQueue(
@@ -371,7 +426,10 @@ final class QueuePlayer implements Player.Listener {
             }
         } else if (desiredIndex >= 0 && desiredIndex < items.size()) {
             resolvedIndex = desiredIndex;
-        } else if (player.getCurrentMediaItemIndex() != C.INDEX_UNSET && player.getCurrentMediaItemIndex() < items.size()) {
+        } else if (
+            player.getCurrentMediaItemIndex() != C.INDEX_UNSET &&
+            player.getCurrentMediaItemIndex() < items.size()
+        ) {
             resolvedIndex = Math.max(0, player.getCurrentMediaItemIndex());
         }
 
@@ -460,10 +518,19 @@ final class QueuePlayer implements Player.Listener {
         String itemId = args.optString("itemId", null);
         if (itemId == null) return;
         double pos = Math.max(0, args.optDouble("positionSeconds", 0));
-        Double dur = args.has("durationSeconds") && !args.isNull("durationSeconds") ? args.optDouble("durationSeconds", 0) : null;
-        Boolean completed = args.has("completed") && !args.isNull("completed") ? args.optBoolean("completed", false) : null;
+        Double dur =
+            args.has("durationSeconds") && !args.isNull("durationSeconds")
+                ? args.optDouble("durationSeconds", 0)
+                : null;
+        Boolean completed =
+            args.has("completed") && !args.isNull("completed")
+                ? args.optBoolean("completed", false)
+                : null;
         long now = System.currentTimeMillis();
-        progressByItemId.put(itemId, new QueueModels.ItemProgress(itemId, pos, dur, completed, now));
+        progressByItemId.put(
+            itemId,
+            new QueueModels.ItemProgress(itemId, pos, dur, completed, now)
+        );
         bumpStateRevision();
         persist();
     }
@@ -473,7 +540,13 @@ final class QueuePlayer implements Player.Listener {
         if (itemId == null) itemId = "";
         QueueModels.ItemProgress p = progressByItemId.get(itemId);
         if (p != null) return p.toJson();
-        return new QueueModels.ItemProgress(itemId, 0, null, null, System.currentTimeMillis()).toJson();
+        return new QueueModels.ItemProgress(
+            itemId,
+            0,
+            null,
+            null,
+            System.currentTimeMillis()
+        ).toJson();
     }
 
     // MARK: - Options
@@ -491,10 +564,16 @@ final class QueuePlayer implements Player.Listener {
         long backMs = Math.max(0, options.skipBackwardSeconds) * 1000L;
         long fwdMs = Math.max(0, options.skipForwardSeconds) * 1000L;
         try {
-            player.getClass().getMethod("setSeekBackIncrementMs", long.class).invoke(player, backMs);
+            player
+                .getClass()
+                .getMethod("setSeekBackIncrementMs", long.class)
+                .invoke(player, backMs);
         } catch (Exception ignored) {}
         try {
-            player.getClass().getMethod("setSeekForwardIncrementMs", long.class).invoke(player, fwdMs);
+            player
+                .getClass()
+                .getMethod("setSeekForwardIncrementMs", long.class)
+                .invoke(player, fwdMs);
         } catch (Exception ignored) {}
     }
 
@@ -571,10 +650,15 @@ final class QueuePlayer implements Player.Listener {
         if (root.optInt("schemaVersion", -1) != QueueStore.SCHEMA_VERSION) return;
         isRestoring = true;
         try {
-            options = QueueModels.PlaybackOptions.fromPartialJson(root.optJSONObject("options"), options);
+            options = QueueModels.PlaybackOptions.fromPartialJson(
+                root.optJSONObject("options"),
+                options
+            );
             applySeekIncrements();
             progressByItemId.clear();
-            progressByItemId.putAll(QueueModels.progressMapFromJson(root.optJSONObject("progressByItemId")));
+            progressByItemId.putAll(
+                QueueModels.progressMapFromJson(root.optJSONObject("progressByItemId"))
+            );
 
             JSONArray q = root.optJSONArray("queue");
             List<QueueModels.QueueItem> items = parseItems(q);
@@ -624,7 +708,10 @@ final class QueuePlayer implements Player.Listener {
     @Override
     public void onEvents(Player player, Player.Events events) {
         // Keep persisted state in sync; JS should explicitly resync on foreground.
-        if (events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) || events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED)) {
+        if (
+            events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) ||
+            events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED)
+        ) {
             if (player.getPlaybackState() == Player.STATE_ENDED) {
                 status = "stopped";
                 isStopped = true;
@@ -665,12 +752,16 @@ final class QueuePlayer implements Player.Listener {
         if (progressTask != null) return;
         if (!player.getPlayWhenReady()) return;
         if (queue.isEmpty()) return;
-        progressTask =
-            progressScheduler.scheduleAtFixedRate(() -> {
+        progressTask = progressScheduler.scheduleAtFixedRate(
+            () -> {
                 try {
                     snapshotProgressOnce();
                 } catch (Exception ignored) {}
-            }, 1, 1, TimeUnit.SECONDS);
+            },
+            1,
+            1,
+            TimeUnit.SECONDS
+        );
     }
 
     private void stopProgressUpdates() {
@@ -737,11 +828,17 @@ final class QueuePlayer implements Player.Listener {
         QueueModels.QueueItem item = queue.get(idx);
         if (item.metadataUpdateUrl == null || item.metadataUpdateUrl.trim().isEmpty()) return;
 
-        int intervalSeconds = item.metadataUpdateInterval != null ? item.metadataUpdateInterval : 15;
+        int intervalSeconds =
+            item.metadataUpdateInterval != null ? item.metadataUpdateInterval : 15;
         intervalSeconds = Math.max(5, intervalSeconds);
         String url = item.metadataUpdateUrl;
 
-        metadataTask = metadataScheduler.scheduleAtFixedRate(() -> fetchAndApplyMetadata(idx, item.id, url), intervalSeconds, intervalSeconds, TimeUnit.SECONDS);
+        metadataTask = metadataScheduler.scheduleAtFixedRate(
+            () -> fetchAndApplyMetadata(idx, item.id, url),
+            intervalSeconds,
+            intervalSeconds,
+            TimeUnit.SECONDS
+        );
     }
 
     private void stopMetadataPolling() {
@@ -767,7 +864,9 @@ final class QueuePlayer implements Player.Listener {
                 conn.disconnect();
                 return;
             }
-            BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
+            BufferedReader r = new BufferedReader(
+                new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8)
+            );
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = r.readLine()) != null) sb.append(line);
@@ -782,14 +881,26 @@ final class QueuePlayer implements Player.Listener {
 
             if (title == null && artist == null && album == null && artwork == null) return;
 
-            String fingerprint = String.valueOf(title) + "|" + String.valueOf(artist) + "|" + String.valueOf(album) + "|" + String.valueOf(artwork);
+            String fingerprint =
+                String.valueOf(title) +
+                "|" +
+                String.valueOf(artist) +
+                "|" +
+                String.valueOf(album) +
+                "|" +
+                String.valueOf(artwork);
             if (fingerprint.equals(lastMetadataFingerprint)) return;
             lastMetadataFingerprint = fingerprint;
 
             int idx = resolveIndexById(itemId, indexHint);
             if (idx < 0 || idx >= queue.size()) return;
             QueueModels.QueueItem current = queue.get(idx);
-            QueueModels.QueueItem updated = current.withUpdatedMetadata(title, artist, album, artwork);
+            QueueModels.QueueItem updated = current.withUpdatedMetadata(
+                title,
+                artist,
+                album,
+                artwork
+            );
             queue.set(idx, updated);
 
             // Update player metadata without restarting playback.
@@ -805,7 +916,9 @@ final class QueuePlayer implements Player.Listener {
     }
 
     private int resolveIndexById(String itemId, int indexHint) {
-        if (indexHint >= 0 && indexHint < queue.size() && itemId.equals(queue.get(indexHint).id)) return indexHint;
+        if (
+            indexHint >= 0 && indexHint < queue.size() && itemId.equals(queue.get(indexHint).id)
+        ) return indexHint;
         for (int i = 0; i < queue.size(); i++) {
             if (itemId.equals(queue.get(i).id)) return i;
         }
@@ -814,7 +927,8 @@ final class QueuePlayer implements Player.Listener {
 
     // MARK: - Parsing helpers
 
-    private static List<QueueModels.QueueItem> parseItems(@Nullable JSONArray arr) throws JSONException {
+    private static List<QueueModels.QueueItem> parseItems(@Nullable JSONArray arr)
+        throws JSONException {
         List<QueueModels.QueueItem> out = new ArrayList<>();
         if (arr == null) return out;
         for (int i = 0; i < arr.length(); i++) {
@@ -853,6 +967,7 @@ final class QueuePlayer implements Player.Listener {
      * Small helper to avoid direct dependency on android.os.Bundle <-> JSON conversion libs.
      */
     private static final class BundleJson {
+
         private final android.os.Bundle b = new android.os.Bundle();
 
         void putJSONObject(String key, JSONObject obj) {
@@ -869,4 +984,3 @@ final class QueuePlayer implements Player.Listener {
         }
     }
 }
-
