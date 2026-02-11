@@ -62,8 +62,14 @@ public class AudioPlayerPlugin extends Plugin {
         cf.addListener(() -> {
             try {
                 MediaController c = cf.get();
-                task.run(c);
-                call.resolve();
+                mainHandler.post(() -> {
+                    try {
+                        task.run(c);
+                        call.resolve();
+                    } catch (Exception e) {
+                        call.reject(errorPrefix, e);
+                    }
+                });
             } catch (Exception e) {
                 call.reject(errorPrefix, e);
             }
@@ -279,7 +285,7 @@ public class AudioPlayerPlugin extends Plugin {
             try {
                 MediaController c = future.get();
                 controller = c;
-                c.addListener(playerListener);
+                mainHandler.post(() -> c.addListener(playerListener));
             } catch (Exception e) {
                 if (callToReject != null) callToReject.reject("Failed to initialize media controller", e);
             }
@@ -314,31 +320,37 @@ public class AudioPlayerPlugin extends Plugin {
         cf.addListener(() -> {
             try {
                 MediaController c = cf.get();
-                Bundle args = new Bundle();
-                args.putString("json", payload != null ? payload.toString() : "{}");
-                ListenableFuture<SessionResult> future = c.sendCustomCommand(
-                    new SessionCommand(action, Bundle.EMPTY),
-                    args
-                );
-                future.addListener(() -> {
+                mainHandler.post(() -> {
                     try {
-                        SessionResult result = future.get();
-                        if (result.resultCode != SessionResult.RESULT_SUCCESS) {
-                            long queueRevision = result.extras != null ? result.extras.getLong("queueRevision", -1) : -1;
-                            if (queueRevision != -1) {
-                                call.reject("Command failed (" + action + "): queueRevision=" + queueRevision);
-                            } else {
-                                call.reject("Command failed (" + action + "), code=" + result.resultCode);
+                        Bundle args = new Bundle();
+                        args.putString("json", payload != null ? payload.toString() : "{}");
+                        ListenableFuture<SessionResult> future = c.sendCustomCommand(
+                            new SessionCommand(action, Bundle.EMPTY),
+                            args
+                        );
+                        future.addListener(() -> {
+                            try {
+                                SessionResult result = future.get();
+                                if (result.resultCode != SessionResult.RESULT_SUCCESS) {
+                                    long queueRevision = result.extras != null ? result.extras.getLong("queueRevision", -1) : -1;
+                                    if (queueRevision != -1) {
+                                        call.reject("Command failed (" + action + "): queueRevision=" + queueRevision);
+                                    } else {
+                                        call.reject("Command failed (" + action + "), code=" + result.resultCode);
+                                    }
+                                    return;
+                                }
+                                if (handler != null) handler.handle(result);
+                                else call.resolve();
+                                scheduleEmit();
+                            } catch (Exception e) {
+                                call.reject("Command failed: " + action, e);
                             }
-                            return;
-                        }
-                        if (handler != null) handler.handle(result);
-                        else call.resolve();
-                        scheduleEmit();
+                        }, MoreExecutors.directExecutor());
                     } catch (Exception e) {
                         call.reject("Command failed: " + action, e);
                     }
-                }, MoreExecutors.directExecutor());
+                });
             } catch (Exception e) {
                 call.reject("Command failed: " + action, e);
             }
@@ -371,17 +383,21 @@ public class AudioPlayerPlugin extends Plugin {
         cf.addListener(() -> {
             try {
                 MediaController c = cf.get();
-                Bundle args = new Bundle();
-                args.putString("json", "{}");
-                ListenableFuture<SessionResult> future = c.sendCustomCommand(new SessionCommand(action, Bundle.EMPTY), args);
-                future.addListener(() -> {
+                mainHandler.post(() -> {
                     try {
-                        SessionResult result = future.get();
-                        String json = result.extras != null ? result.extras.getString(resultKey) : null;
-                        if (json == null) return;
-                        handler.handle(json);
+                        Bundle args = new Bundle();
+                        args.putString("json", "{}");
+                        ListenableFuture<SessionResult> future = c.sendCustomCommand(new SessionCommand(action, Bundle.EMPTY), args);
+                        future.addListener(() -> {
+                            try {
+                                SessionResult result = future.get();
+                                String json = result.extras != null ? result.extras.getString(resultKey) : null;
+                                if (json == null) return;
+                                handler.handle(json);
+                            } catch (Exception ignored) {}
+                        }, MoreExecutors.directExecutor());
                     } catch (Exception ignored) {}
-                }, MoreExecutors.directExecutor());
+                });
             } catch (Exception ignored) {}
         }, MoreExecutors.directExecutor());
     }
@@ -498,13 +514,16 @@ public class AudioPlayerPlugin extends Plugin {
 
         // Release controller (best-effort).
         if (controller != null) {
-            try {
-                controller.removeListener(playerListener);
-            } catch (Exception ignored) {}
-            try {
-                controller.release();
-            } catch (Exception ignored) {}
+            final MediaController c = controller;
             controller = null;
+            mainHandler.post(() -> {
+                try {
+                    c.removeListener(playerListener);
+                } catch (Exception ignored) {}
+                try {
+                    c.release();
+                } catch (Exception ignored) {}
+            });
         }
 
         // Release controller future (best-effort).

@@ -132,6 +132,9 @@ final class QueuePlayer implements Player.Listener {
         if (resId == 0) {
             resId = context.getResources().getIdentifier("ic_media_play", "drawable", context.getPackageName());
         }
+        if (resId == 0) {
+            resId = context.getApplicationInfo().icon;
+        }
         return resId;
     }
 
