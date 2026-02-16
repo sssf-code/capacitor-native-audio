@@ -34,6 +34,10 @@ final class QueuePlayer implements Player.Listener {
 
     private static final String TAG = "QueuePlayer";
 
+    interface CustomLayoutUpdater {
+        void updateCustomLayout();
+    }
+
     // Custom commands (plugin -> service)
     static final String CMD_SET_QUEUE = "mg.audio.setQueue";
     static final String CMD_SYNC_QUEUE = "mg.audio.syncQueue";
@@ -70,6 +74,8 @@ final class QueuePlayer implements Player.Listener {
 
     private QueueModels.PlaybackOptions options = QueueModels.PlaybackOptions.defaults();
 
+    private @Nullable CustomLayoutUpdater layoutUpdater;
+
     private boolean isRestoring = false;
     private boolean isStopped = true;
 
@@ -102,6 +108,20 @@ final class QueuePlayer implements Player.Listener {
 
     QueueModels.PlaybackOptions getOptionsSnapshot() {
         return options;
+    }
+
+    void setCustomLayoutUpdater(CustomLayoutUpdater updater) {
+        this.layoutUpdater = updater;
+    }
+
+    int getQueueSize() {
+        return queue.size();
+    }
+
+    private void updateCustomLayoutIfNeeded() {
+        if (layoutUpdater != null) {
+            layoutUpdater.updateCustomLayout();
+        }
     }
 
     void release() {
@@ -445,6 +465,7 @@ final class QueuePlayer implements Player.Listener {
         persist();
         startMetadataPollingIfNeeded();
         startProgressUpdatesIfNeeded();
+        updateCustomLayoutIfNeeded();
     }
 
     private void clearQueueInternal() {
@@ -456,6 +477,7 @@ final class QueuePlayer implements Player.Listener {
         status = "stopped";
         bumpQueueRevision();
         persist();
+        updateCustomLayoutIfNeeded();
     }
 
     // MARK: - Playback helpers

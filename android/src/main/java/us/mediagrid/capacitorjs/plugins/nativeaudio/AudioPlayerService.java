@@ -29,7 +29,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import org.json.JSONObject;
 
-public class AudioPlayerService extends MediaSessionService {
+public class AudioPlayerService extends MediaSessionService implements QueuePlayer.CustomLayoutUpdater {
 
     private static final String TAG = "AudioPlayerService";
     public static final String PLAYBACK_CHANNEL_ID = "playback_channel";
@@ -67,6 +67,7 @@ public class AudioPlayerService extends MediaSessionService {
         player.setPlayWhenReady(false);
 
         queuePlayer = new QueuePlayer(this, player);
+        queuePlayer.setCustomLayoutUpdater(this);
         Player sessionPlayer = buildSessionPlayer(player);
         ImmutableList<CommandButton> customLayout = buildPrevNextLayout();
         MediaSession.Builder sessionBuilder = new MediaSession.Builder(this, sessionPlayer)
@@ -172,7 +173,7 @@ public class AudioPlayerService extends MediaSessionService {
 
     @UnstableApi
     private ImmutableList<CommandButton> buildPrevNextLayout() {
-        if (!queuePlayer.getOptionsSnapshot().enableNextPrev) {
+        if (!queuePlayer.getOptionsSnapshot().enableNextPrev || queuePlayer.getQueueSize() <= 1) {
             return ImmutableList.of();
         }
         int prevIcon = getDrawableResId(
@@ -205,6 +206,14 @@ public class AudioPlayerService extends MediaSessionService {
             if (id != 0) return id;
         } catch (Exception ignored) {}
         return fallback;
+    }
+
+    @UnstableApi
+    @Override
+    public void updateCustomLayout() {
+        if (mediaSession == null) return;
+        ImmutableList<CommandButton> newLayout = buildPrevNextLayout();
+        mediaSession.setCustomLayout(newLayout);
     }
 
     private void createNotificationChannelIfNeeded() {
