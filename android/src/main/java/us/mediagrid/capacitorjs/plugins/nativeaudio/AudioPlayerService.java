@@ -62,6 +62,7 @@ public class AudioPlayerService extends MediaSessionService implements QueuePlay
                     .build(),
                 true
             )
+            .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build();
         player.setPlayWhenReady(false);
@@ -293,7 +294,7 @@ public class AudioPlayerService extends MediaSessionService implements QueuePlay
                 Log.i(TAG, "Audio becoming noisy, pausing playback");
                 if (mediaSession != null) {
                     Player player = mediaSession.getPlayer();
-                    if (player != null && player.getPlayWhenReady()) {
+                    if (player != null && player.isPlaying()) {
                         player.pause();
                     }
                 }
