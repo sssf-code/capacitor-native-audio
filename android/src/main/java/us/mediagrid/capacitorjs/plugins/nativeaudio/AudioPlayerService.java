@@ -26,7 +26,10 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import org.json.JSONObject;
 
-public class AudioPlayerService extends MediaSessionService implements QueuePlayer.CustomLayoutUpdater {
+public class AudioPlayerService
+    extends MediaSessionService
+    implements QueuePlayer.CustomLayoutUpdater
+{
 
     private static final String TAG = "AudioPlayerService";
     public static final String PLAYBACK_CHANNEL_ID = "playback_channel";
@@ -99,7 +102,22 @@ public class AudioPlayerService extends MediaSessionService implements QueuePlay
 
     @Override
     public void onTaskRemoved(@Nullable Intent rootIntent) {
-        Log.i(TAG, "Task removed");
+        Log.i(TAG, "Task removed - stopping playback and service");
+
+        // Stop playback when app is closed
+        if (mediaSession != null) {
+            Player player = mediaSession.getPlayer();
+            if (player != null) {
+                try {
+                    player.setPlayWhenReady(false);
+                    player.stop();
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // Stop the service itself
+        stopSelf();
+
         super.onTaskRemoved(rootIntent);
     }
 
@@ -267,5 +285,4 @@ public class AudioPlayerService extends MediaSessionService implements QueuePlay
             return null;
         }
     }
-
 }
