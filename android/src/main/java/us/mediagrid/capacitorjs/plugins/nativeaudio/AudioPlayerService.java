@@ -3,12 +3,9 @@ package ssf.capacitorjs.plugins.nativeaudio;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.content.res.AssetManager;
-import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -35,7 +32,6 @@ public class AudioPlayerService extends MediaSessionService implements QueuePlay
     public static final String PLAYBACK_CHANNEL_ID = "playback_channel";
     private MediaSession mediaSession = null;
     private QueuePlayer queuePlayer = null;
-    private BecomingNoisyReceiver becomingNoisyReceiver = null;
 
     @Override
     public void onCreate() {
@@ -62,6 +58,7 @@ public class AudioPlayerService extends MediaSessionService implements QueuePlay
                     .build(),
                 true
             )
+            .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build();
         player.setPlayWhenReady(false);
@@ -86,14 +83,6 @@ public class AudioPlayerService extends MediaSessionService implements QueuePlay
         // Optional Media3 notification policies (read from Capacitor config).
         tryApplyNotificationPoliciesFromCapacitorConfig(provider);
         setMediaNotificationProvider(provider);
-
-        becomingNoisyReceiver = new BecomingNoisyReceiver();
-        IntentFilter noisyFilter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(becomingNoisyReceiver, noisyFilter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            registerReceiver(becomingNoisyReceiver, noisyFilter);
-        }
     }
 
     @Override
@@ -117,12 +106,6 @@ public class AudioPlayerService extends MediaSessionService implements QueuePlay
     @Override
     public void onDestroy() {
         Log.i(TAG, "Service being destroyed");
-        if (becomingNoisyReceiver != null) {
-            try {
-                unregisterReceiver(becomingNoisyReceiver);
-            } catch (Exception ignored) {}
-            becomingNoisyReceiver = null;
-        }
         if (mediaSession != null) {
             mediaSession.getPlayer().release();
             mediaSession.release();
@@ -285,19 +268,4 @@ public class AudioPlayerService extends MediaSessionService implements QueuePlay
         }
     }
 
-    private class BecomingNoisyReceiver extends BroadcastReceiver {
-
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
-                Log.i(TAG, "Audio becoming noisy, pausing playback");
-                if (mediaSession != null) {
-                    Player player = mediaSession.getPlayer();
-                    if (player != null && player.getPlayWhenReady()) {
-                        player.pause();
-                    }
-                }
-            }
-        }
-    }
 }
