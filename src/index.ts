@@ -6,5 +6,33 @@ const AudioPlayer = registerPlugin<AudioPlayerPlugin>('AudioPlayer', {
     web: () => import('./web').then(m => new m.AudioPlayerWeb()),
 });
 
-export * from './definitions';
+export type {
+    AddQueueItemsParams,
+    AudioPlayerPlugin,
+    GetItemProgressParams,
+    GetQueueResult,
+    ItemProgress,
+    MetadataChangeEvent,
+    MoveQueueItemParams,
+    PlaybackOptions,
+    PlaybackStatus,
+    PlayerState,
+    QueueChangeEvent,
+    QueueItem,
+    RemoveQueueItemParams,
+    RepeatMode,
+    SeekParams,
+    SetItemProgressParams,
+    SetPlaybackOptionsParams,
+    SetQueueParams,
+    SetRateParams,
+    SetRepeatModeParams,
+    SetShuffleParams,
+    SetVolumeParams,
+    SkipToIndexParams,
+    SyncQueueMode,
+    SyncQueueParams,
+    SyncQueueResult,
+    TrackChangeEvent,
+} from './definitions';
 export { AudioPlayer };

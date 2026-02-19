@@ -1,11 +1,11 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-    appId: 'com.example.plugin',
+    appId: 'org.hiddentreasures.audiotest',
     appName: 'example',
     webDir: 'dist',
     server: {
-        url: 'http://localhost:5173',
+        url: 'http://192.168.128.83:5173',
         cleartext: true,
     },
 };

@@ -25,7 +25,7 @@
         </activity>
 
         <service
-            android:name="us.mediagrid.capacitorjs.plugins.nativeaudio.AudioPlayerService"
+            android:name="ssf.capacitorjs.plugins.nativeaudio.AudioPlayerService"
             android:description="@string/audio_player_service_description"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true">

@@ -1,199 +1,233 @@
 import type { CapacitorException } from '@capacitor/core';
-import { AudioPlayer } from '@mediagrid/capacitor-native-audio';
+import { AudioPlayer, type PlayerState, type QueueItem } from '@ssf/capacitor-native-audio';
 
-const mainAudioHref = new URL('/assets/karen_the_news_update.mp3', import.meta.url).href;
-const bgAudioHref = new URL('/assets/komiku_bicycle.mp3', import.meta.url).href;
+const newsHref = new URL('/assets/karen_the_news_update.mp3', import.meta.url).href;
+const bicycleHref = new URL('/assets/komiku_bicycle.mp3', import.meta.url).href;
 
-const audioId = generateAudioId();
-const bgAudioId = generateAudioId();
+const audiobookQueue: QueueItem[] = [
+    {
+        id: 'chapter-1',
+        src: newsHref,
+        title: 'Chapter 1',
+        artist: 'Example',
+        album: 'Example Audiobook',
+        artwork: 'assets/sample_artwork.png',
+    },
+    {
+        id: 'chapter-2',
+        src: bicycleHref,
+        title: 'Chapter 2',
+        artist: 'Example',
+        album: 'Example Audiobook',
+        artwork: 'assets/sample_artwork.png',
+    },
+    {
+        id: 'chapter-3',
+        src: newsHref,
+        title: 'Chapter 3',
+        artist: 'Example',
+        album: 'Example Audiobook',
+        artwork: 'assets/sample_artwork.png',
+    },
+];
 
-console.log(`audioId: ${audioId}, bgAudioId: ${bgAudioId}`);
+const podcastQueue: QueueItem[] = [
+    {
+        id: 'ep-101',
+        src: newsHref,
+        title: 'Episode 101',
+        artist: 'Example Show',
+        album: 'Example Podcast',
+        artwork: 'assets/sample_artwork.png',
+    },
+    {
+        id: 'ep-102',
+        src: bicycleHref,
+        title: 'Episode 102',
+        artist: 'Example Show',
+        album: 'Example Podcast',
+        artwork: 'assets/sample_artwork.png',
+    },
+];
 
-let isInitialized = false;
+let lastState: PlayerState | null = null;
 
-async function initialize(): Promise<void> {
-    isInitialized = true;
-
-    await AudioPlayer.create({
-        audioId: audioId,
-        audioSource: mainAudioHref,
-        // albumTitle: 'My Album Title',
-        // artistName: 'My Artist',
-        friendlyTitle: 'My Test Audio',
-        useForNotification: true,
-        artworkSource: 'assets/sample_artwork.png',
-        // artworkSource: 'https://placehold.co/1200.jpg',
-        isBackgroundMusic: false,
-        loop: false,
-        showSeekForward: true,
-        showSeekBackward: true,
-        // seekBackwardTime: 2,
-        // seekForwardTime: 2,
-        // metadataUpdateUrl: 'https://pfd4e5xj5qvsvsdcghre2222vm0pvhsj.lambda-url.us-east-2.on.aws?includeOtherData=0',
-        // metadataUpdateInterval: 30,
-    }).catch(ex => setError(ex));
-
-    await AudioPlayer.create({
-        audioId: bgAudioId,
-        audioSource: bgAudioHref,
-        friendlyTitle: '',
-        useForNotification: false,
-        isBackgroundMusic: true,
-        loop: true,
-    }).catch(ex => setError(ex));
-
-    await AudioPlayer.onAudioReady({ audioId: audioId }, async () => {
-        setText(
-            'duration',
-            Math.ceil((await AudioPlayer.getDuration({ audioId: audioId })).duration).toString(),
-        );
+async function init(): Promise<void> {
+    AudioPlayer.addListener('stateChange', state => {
+        lastState = state;
+        render();
+    });
+    AudioPlayer.addListener('queueChange', q => {
+        void q;
+        render();
+    });
+    AudioPlayer.addListener('trackChange', () => {
+        void resync();
     });
 
-    AudioPlayer.onAudioEnd({ audioId: audioId }, async () => {
-        setText('status', 'stopped');
-
-        stopCurrentPositionUpdate(true);
-
-        AudioPlayer.stop({ audioId: bgAudioId });
-    });
-
-    AudioPlayer.onPlaybackStatusChange({ audioId: audioId }, result => {
-        setText('status', result.status);
-
-        switch (result.status) {
-            case 'playing':
-                AudioPlayer.play({ audioId: bgAudioId });
-                startCurrentPositionUpdate();
-                break;
-            case 'paused':
-                AudioPlayer.pause({ audioId: bgAudioId });
-                stopCurrentPositionUpdate();
-                break;
-            case 'stopped':
-                AudioPlayer.stop({ audioId: bgAudioId });
-                stopCurrentPositionUpdate(true);
-                break;
-            default:
-                AudioPlayer.stop({ audioId: bgAudioId });
-                break;
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            void resync();
         }
     });
 
-    AudioPlayer.onMetadataUpdate({ audioId: audioId }, result => {
-        console.log(result);
-    });
+    addClickEvent('loadAudiobookQueue', () => void loadQueue(audiobookQueue));
+    addClickEvent('loadPodcastQueue', () => void loadQueue(podcastQueue));
+    addClickEvent('patchSyncButton', () => void patchSync(false));
+    addClickEvent('patchSyncMismatchButton', () => void patchSync(true));
+    addClickEvent('resyncButton', () => void resync());
+    addClickEvent('clearQueueButton', () => void AudioPlayer.clearQueue().catch(setError));
 
-    await AudioPlayer.initialize({ audioId: audioId }).catch(ex => setError(ex));
-    await AudioPlayer.initialize({ audioId: bgAudioId }).catch(ex => setError(ex));
+    addClickEvent('playButton', () => void AudioPlayer.play().catch(setError));
+    addClickEvent('pauseButton', () => void AudioPlayer.pause().catch(setError));
+    addClickEvent('stopButton', () => void AudioPlayer.stop().catch(setError));
+    addClickEvent('nextButton', () => void AudioPlayer.skipToNext().catch(setError));
+    addClickEvent('prevButton', () => void AudioPlayer.skipToPrevious().catch(setError));
+
+    addClickEvent('addItemButton', () => void addOneItem());
+    addClickEvent('removeCurrentButton', () => void removeCurrentItem());
+    addClickEvent('moveLastToFirstButton', () => void moveLastToFirst());
+    addClickEvent('repeatButton', () => void cycleRepeatMode());
+    addClickEvent('shuffleButton', () => void toggleShuffle());
+
+    // Set some options to make OS controls nicer.
+    await AudioPlayer.setPlaybackOptions({
+        previousThresholdSeconds: 8,
+        skipForwardSeconds: 10,
+        skipBackwardSeconds: 10,
+        enableNextPrev: true,
+        enableSeekTo: true,
+        enableStop: true,
+    }).catch(setError);
+
+    await resync();
 }
 
-addClickEvent('playButton', async () => {
-    if (!isInitialized) {
-        await initialize();
-    }
-
-    setText('status', 'playing');
-
-    await AudioPlayer.play({ audioId });
-    AudioPlayer.play({ audioId: bgAudioId });
-    startCurrentPositionUpdate();
-
-    AudioPlayer.setVolume({ audioId: bgAudioId, volume: 0.5 });
-    AudioPlayer.play({ audioId: bgAudioId });
-});
-
-addClickEvent('pauseButton', () => {
-    setText('status', 'paused');
-
-    stopCurrentPositionUpdate();
-    AudioPlayer.pause({ audioId });
-
-    AudioPlayer.pause({ audioId: bgAudioId });
-});
-
-addClickEvent('stopButton', () => {
-    setText('status', 'stopped');
-
-    stopCurrentPositionUpdate(true);
-    AudioPlayer.stop({ audioId });
-
-    AudioPlayer.stop({ audioId: bgAudioId });
-});
-
-addClickEvent('changeMetadataButton', () => {
-    AudioPlayer.changeMetadata({
-        audioId: audioId,
-        // albumTitle: 'A New Album',
-        // artistName: 'A New Artist',
-        friendlyTitle: 'A New Title',
-        artworkSource: 'assets/sample_artwork_new.png',
-        // artworkSource: 'https://placehold.co/1200.jpg',
-    });
-});
-
-addClickEvent('updateMetadataButton', () => {
-    AudioPlayer.updateMetadata({
-        audioId: audioId,
-    });
-});
-
-addClickEvent('cleanupButton', async () => {
-    setText('status', 'stopped');
-
-    stopCurrentPositionUpdate(true);
-
-    await AudioPlayer.destroy({ audioId: bgAudioId });
-    AudioPlayer.destroy({ audioId: audioId });
-
-    isInitialized = false;
-});
-
-let currentPositionIntervalId = 0;
-
-function startCurrentPositionUpdate(): void {
-    stopCurrentPositionUpdate();
-
-    currentPositionIntervalId = window.setInterval(async () => {
-        setText(
-            'currentTime',
-            Math.round(
-                (await AudioPlayer.getCurrentTime({ audioId: audioId })).currentTime,
-            ).toString(),
-        );
-    }, 1000);
+async function cycleRepeatMode(): Promise<void> {
+    const state = await AudioPlayer.getState().catch(() => null);
+    const current = state?.repeatMode ?? 'off';
+    const next = current === 'off' ? 'one' : current === 'one' ? 'all' : 'off';
+    await AudioPlayer.setRepeatMode({ repeatMode: next }).catch(setError);
+    await resync();
 }
 
-function stopCurrentPositionUpdate(resetText = false): void {
-    clearInterval(currentPositionIntervalId);
-    currentPositionIntervalId = 0;
+async function toggleShuffle(): Promise<void> {
+    const state = await AudioPlayer.getState().catch(() => null);
+    const next = !(state?.shuffle ?? false);
+    await AudioPlayer.setShuffle({ shuffle: next }).catch(setError);
+    await resync();
+}
 
-    if (resetText) {
-        setText('currentTime', '0');
+async function patchSync(forceMismatch: boolean): Promise<void> {
+    const q = await AudioPlayer.getQueue().catch(() => null);
+    if (!q) return;
+
+    const expected = forceMismatch ? q.queueRevision + 9999 : q.queueRevision;
+    const items = q.items.map(it => ({
+        ...it,
+        title: `${it.title} (patched)`,
+    }));
+
+    await AudioPlayer.syncQueue({
+        items,
+        mode: 'patch',
+        expectedQueueRevision: expected,
+        force: false,
+        autoplay: false,
+        currentItemId: q.currentItemId,
+    }).catch(setError);
+
+    await resync();
+}
+
+async function loadQueue(items: QueueItem[]): Promise<void> {
+    // Resume from bookmark for the first item (audiobook-friendly).
+    const firstId = items[0]?.id;
+    let startPos = 0;
+    if (firstId) {
+        const prog = await AudioPlayer.getItemProgress({ itemId: firstId }).catch(() => null);
+        if (prog?.positionSeconds) startPos = prog.positionSeconds;
     }
+
+    await AudioPlayer.setQueue({
+        items,
+        startIndex: 0,
+        startPositionSeconds: startPos,
+        autoplay: false,
+    }).catch(setError);
+
+    await resync();
+}
+
+async function addOneItem(): Promise<void> {
+    const id = `extra-${Math.floor(Math.random() * 1e9)}`;
+    await AudioPlayer.addQueueItems({
+        items: [
+            {
+                id,
+                src: bicycleHref,
+                title: `Extra item (${id})`,
+                artist: 'Example',
+                album: 'Dynamic Queue',
+                artwork: 'assets/sample_artwork.png',
+            },
+        ],
+    }).catch(setError);
+    await resync();
+}
+
+async function removeCurrentItem(): Promise<void> {
+    const state = await AudioPlayer.getState().catch(() => null);
+    const itemId = state?.currentItemId;
+    if (!itemId) return;
+    await AudioPlayer.removeQueueItem({ itemId }).catch(setError);
+    await resync();
+}
+
+async function moveLastToFirst(): Promise<void> {
+    const q = await AudioPlayer.getQueue().catch(() => null);
+    if (!q || q.items.length < 2) return;
+    await AudioPlayer.moveQueueItem({ fromIndex: q.items.length - 1, toIndex: 0 }).catch(setError);
+    await resync();
+}
+
+async function resync(): Promise<void> {
+    const state = await AudioPlayer.getState().catch(() => null);
+    if (state) lastState = state;
+    render();
+}
+
+function render(): void {
+    const s = lastState;
+    setText('status', s?.status ?? 'stopped');
+    setText('stateRevision', `${s?.stateRevision ?? 0}`);
+    setText('queueRevision', `${s?.queueRevision ?? 0}`);
+    setText('currentIndex', `${s?.currentIndex ?? 0}`);
+    setText('currentItemId', s?.currentItemId ?? '-');
+    setText('position', `${Math.floor(s?.position ?? 0)}`);
+    setText('duration', s?.duration != null ? `${Math.floor(s.duration)}` : '-');
+    setText('rate', `${s?.rate ?? 1}`);
+    setText('volume', `${s?.volume ?? 100}`);
+
+    const repeatLabel = s?.repeatMode ?? 'off';
+    setText('repeatButton', `Repeat: ${repeatLabel}`);
+    setText('shuffleButton', `Shuffle: ${(s?.shuffle ?? false) ? 'on' : 'off'}`);
 }
 
 function addClickEvent(elementId: string, callback: () => void): void {
     const el = document.getElementById(elementId);
-
-    if (el) {
-        el.onclick = callback;
-    }
-}
-
-function generateAudioId(): string {
-    return Math.ceil(Math.random() * 10000000).toString();
+    if (el) el.onclick = callback;
 }
 
 function setError(exception: unknown) {
     const ex = exception as CapacitorException;
-
-    setText('error', ex.message);
+    setText('error', ex?.message ?? String(exception));
 }
 
 function setText(elementId: string, text: string): void {
     const el = document.getElementById(elementId);
-
-    if (el) {
-        el.innerText = text;
-    }
+    if (el) el.innerText = text;
 }
+
+void init();
+

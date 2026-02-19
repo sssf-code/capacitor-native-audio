@@ -1,4 +1,3 @@
-import AVFAudio
 import Capacitor
 import Foundation
 
@@ -7,571 +6,378 @@ public class AudioPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "AudioPlayerPlugin"
     public let jsName = "AudioPlayer"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "create", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "initialize", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "changeAudioSource", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "changeMetadata", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "updateMetadata", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getDuration", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getCurrentTime", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setQueue", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "syncQueue", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getQueue", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "addQueueItems", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "removeQueueItem", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "moveQueueItem", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearQueue", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "play", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pause", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "seek", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "seek", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "skipToNext", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "skipToPrevious", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "skipToIndex", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setVolume", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setRate", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "isPlaying", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "destroy", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "onAppGainsFocus", returnType: CAPPluginReturnCallback),
-        CAPPluginMethod(name: "onAppLosesFocus", returnType: CAPPluginReturnCallback),
-        CAPPluginMethod(name: "onAudioReady", returnType: CAPPluginReturnCallback),
-        CAPPluginMethod(name: "onAudioEnd", returnType: CAPPluginReturnCallback),
-        CAPPluginMethod(name: "onPlaybackStatusChange", returnType: CAPPluginReturnCallback),
-        CAPPluginMethod(name: "onMetadataUpdate", returnType: CAPPluginReturnCallback)
+        CAPPluginMethod(name: "getState", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setItemProgress", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getItemProgress", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setPlaybackOptions", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getPlaybackOptions", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setRepeatMode", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setShuffle", returnType: CAPPluginReturnPromise)
     ]
 
-    let audioSession = AVAudioSession.sharedInstance()
-    var audioSources = AudioSources()
-    var onGainsFocusCallbackIds: [String: String] = [:]
-    var onLosesFocusCallbackIds: [String: String] = [:]
+    private var queuePlayer: NativeQueuePlayer?
 
     override public func load() {
         super.load()
-
-        do {
-            try audioSession.setCategory(
-                AVAudioSession.Category.playback,
-                mode: AVAudioSession.Mode.spokenAudio
-            )
-
-            try audioSession.setActive(false)
-        } catch {
-            print("Failed to set audio session category")
-        }
-
-        print("Listening to app background/foreground event changes")
-
-        let notificationCenter = NotificationCenter.default
-
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(handleAppToBackground),
-            name: UIApplication.willResignActiveNotification,
-            object: nil
-        )
-
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(handleAppToForeground),
-            name: UIApplication.didBecomeActiveNotification,
-            object: nil
-        )
+        // If the plugin is reloaded, ensure we tear down the old instance cleanly.
+        queuePlayer?.release()
+        queuePlayer = NativeQueuePlayer(plugin: self)
     }
 
-    @objc func create(_ call: CAPPluginCall) {
+    deinit {
+        queuePlayer?.release()
+    }
+
+    // MARK: - Queue
+
+    @objc func setQueue(_ call: CAPPluginCall) {
         do {
-            let sourceId = try audioId(call)
-
-            if audioSources.exists(sourceId: sourceId) {
-                print("An audio source with the ID \(sourceId) already exists")
-                call.reject("There was an issue creating the audio player [0].")
-
-                return
-            }
-
-            guard let source = call.getString("audioSource") else {
-                throw AudioPlayerError.invalidPath
-            }
-            guard let friendlyTitle = call.getString("friendlyTitle") else {
-                throw AudioPlayerError.invalidFriendlyName
-            }
-
-            let audioSource = AudioSource(
-                pluginOwner: self,
-                id: sourceId,
-                source: source,
-                audioMetadata: AudioMetadata(
-                    albumTitle: call.getString("albumTitle", ""),
-                    artistName: call.getString("artistName", ""),
-                    songTitle: friendlyTitle,
-                    artworkSource: call.getString("artworkSource", ""),
-                    updateUrl: call.getString("metadataUpdateUrl", ""),
-                    updateInterval: call.getInt("metadataUpdateInterval", -1)
-                ),
-                useForNotification: call.getBool("useForNotification", false),
-                isBackgroundMusic: call.getBool("isBackgroundMusic", false),
-                loopAudio: call.getBool("loop", false),
-                showSeekBackward: call.getBool("showSeekBackward", true),
-                showSeekForward: call.getBool("showSeekForward", true),
-                seekBackwardTime: call.getInt("seekBackwardTime", 5),
-                seekForwardTime: call.getInt("seekForwardTime", 5)
-            )
-
-            if audioSources.count() == 0 && !audioSource.useForNotification {
-                throw AudioPlayerError.runtimeError(
-                    "An audio source with useForNotification = true must exist first."
-                )
-            }
-
-            if audioSources.hasNotification() && audioSource.useForNotification {
-                throw AudioPlayerError.runtimeError(
-                    "An audio source with useForNotification = true already exists. There can only be one."
-                )
-            }
-
-            try audioSources.add(source: audioSource)
-
+            let parsed = try parseQueueItems(call)
+            let startIndex = call.getInt("startIndex")
+            let startPos = call.getDouble("startPositionSeconds")
+            let autoplay = call.getBool("autoplay")
+            queuePlayer?.setQueue(items: parsed, startIndex: startIndex, startPositionSeconds: startPos, autoplay: autoplay)
             call.resolve()
         } catch {
-            call.reject(
-                "There was an issue creating the audio player [1].",
-                nil,
-                error
-            )
+            call.reject("There was an issue setting the queue.", nil, error)
         }
     }
 
-    @objc func initialize(_ call: CAPPluginCall) {
+    @objc func syncQueue(_ call: CAPPluginCall) {
         do {
-            try getAudioSource(methodName: "initialize", call: call)
-                .initialize()
+            let parsed = try parseQueueItems(call)
+            let mode = call.getString("mode") ?? "replace"
+            let expectedQueueRevision = call.getInt("expectedQueueRevision")
+            let force = call.getBool("force") ?? false
 
-            call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject(
-                "There was an issue initializing the audio player.",
-                nil,
-                error
-            )
-        }
-    }
-
-    @objc func changeAudioSource(_ call: CAPPluginCall) {
-        do {
-            guard let newSource = call.getString("source") else {
-                throw AudioPlayerError.invalidSource
+            if let expectedQueueRevision, !force {
+                let current = Int(queuePlayer?.state.queueRevision ?? 0)
+                if expectedQueueRevision != current {
+                    call.reject("Queue revision mismatch (expected \(expectedQueueRevision), have \(current)).")
+                    return
+                }
             }
 
-            try getAudioSource(methodName: "changeAudioSource", call: call)
-                .changeAudioSource(newSource: newSource)
+            let currentItemId = call.getString("currentItemId")
+            let startIndex = call.getInt("startIndex")
+            let startPos = call.getDouble("startPositionSeconds")
+            let autoplay = call.getBool("autoplay")
+            queuePlayer?.syncQueue(mode: mode, items: parsed, currentItemId: currentItemId, startIndex: startIndex, startPositionSeconds: startPos, autoplay: autoplay)
+            let queueRevision = queuePlayer?.state.queueRevision ?? 0
+            call.resolve(["queueRevision": queueRevision])
+        } catch {
+            call.reject("There was an issue syncing the queue.", nil, error)
+        }
+    }
 
+    @objc func getQueue(_ call: CAPPluginCall) {
+        call.resolve(queuePlayer?.getQueueResult() ?? ["queueRevision": 0, "items": [], "currentIndex": 0, "currentItemId": NSNull()])
+    }
+
+    @objc func addQueueItems(_ call: CAPPluginCall) {
+        do {
+            let parsed = try parseQueueItems(call)
+            let atIndex = call.getInt("atIndex")
+            queuePlayer?.addQueueItems(items: parsed, atIndex: atIndex)
             call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
-            return
         } catch {
-            call.reject(
-                "There was an issue changing the audio source.",
-                nil,
-                error
-            )
+            call.reject("There was an issue adding queue items.", nil, error)
         }
     }
 
-    @objc func changeMetadata(_ call: CAPPluginCall) {
-        do {
-            try getAudioSource(methodName: "changeMetadata", call: call)
-                .changeMetadata(
-                    metadata: AudioMetadata(
-                        albumTitle: call.getString("albumTitle", ""),
-                        artistName: call.getString("artistName", ""),
-                        songTitle: call.getString("friendlyTitle", ""),
-                        artworkSource: call.getString("artworkSource", ""),
-                        updateUrl: "",
-                        updateInterval: -1
-                    )
-                )
-
-            call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
+    @objc func removeQueueItem(_ call: CAPPluginCall) {
+        guard let itemId = call.getString("itemId") else {
+            call.reject("itemId is required.")
             return
-        } catch {
-            call.reject(
-                "There was an issue changing the metadata.",
-                nil,
-                error
-            )
         }
+        queuePlayer?.removeQueueItem(itemId: itemId)
+        call.resolve()
     }
 
-    @objc func updateMetadata(_ call: CAPPluginCall) {
-        do {
-            try getAudioSource(methodName: "updateMetadata", call: call)
-                .audioMetadata
-                .updateMetadataByUrl()
-
-            call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
+    @objc func moveQueueItem(_ call: CAPPluginCall) {
+        guard let fromIndex = call.getInt("fromIndex"), let toIndex = call.getInt("toIndex") else {
+            call.reject("fromIndex and toIndex are required.")
             return
-        } catch {
-            call.reject(
-                "There was an issue updating the metadata.",
-                nil,
-                error
-            )
         }
+        queuePlayer?.moveQueueItem(fromIndex: fromIndex, toIndex: toIndex)
+        call.resolve()
     }
 
-    @objc func getDuration(_ call: CAPPluginCall) {
-        do {
-            let duration = try getAudioSource(
-                methodName: "duration",
-                call: call
-            ).getDuration()
-
-            call.resolve(["duration": duration])
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject(
-                "There was an issue getting the duration for the audio source.",
-                nil,
-                error
-            )
-        }
-    }
-
-    @objc func getCurrentTime(_ call: CAPPluginCall) {
-        do {
-            let currentTime = try getAudioSource(
-                methodName: "currentTime",
-                call: call
-            ).getCurrentTime()
-
-            call.resolve(["currentTime": currentTime])
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject(
-                "There was an issue getting the current time for the audio source.",
-                nil,
-                error
-            )
-        }
+    @objc func clearQueue(_ call: CAPPluginCall) {
+        queuePlayer?.clearQueue()
+        call.resolve()
     }
 
     @objc func play(_ call: CAPPluginCall) {
-        do {
-            let audioSource = try getAudioSource(methodName: "play", call: call)
-
-            if audioSource.useForNotification {
-                try audioSession.setActive(true)
-            }
-
-            audioSource.play()
-
-            call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject("There was an issue playing the audio.", nil, error)
-        }
+        queuePlayer?.play()
+        call.resolve()
     }
 
     @objc func pause(_ call: CAPPluginCall) {
-        do {
-            try getAudioSource(methodName: "pause", call: call).pause()
-
-            call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject("There was an issue pausing the audio.", nil, error)
-        }
-    }
-
-    @objc func seek(_ call: CAPPluginCall) {
-        do {
-            guard let timeInSeconds = call.getInt("timeInSeconds") else {
-                throw AudioPlayerError.invalidSeekTime
-            }
-
-            try getAudioSource(methodName: "seek", call: call).seek(
-                timeInSeconds: Int64(timeInSeconds),
-                fromUi: true
-            )
-
-            call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject("There was an issue seeking the audio.", nil, error)
-        }
+        queuePlayer?.pause()
+        call.resolve()
     }
 
     @objc func stop(_ call: CAPPluginCall) {
-        do {
-            let audioSource = try getAudioSource(methodName: "stop", call: call)
+        queuePlayer?.stop()
+        call.resolve()
+    }
 
-            audioSource.stop()
-
-            if audioSource.useForNotification {
-                try audioSession.setActive(false)
-            }
-
-            call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
+    @objc func seek(_ call: CAPPluginCall) {
+        guard let pos = call.getDouble("positionSeconds") else {
+            call.reject("positionSeconds is required.")
             return
-        } catch {
-            call.reject("There was an issue stopping the audio.", nil, error)
         }
+        queuePlayer?.seek(positionSeconds: pos)
+        call.resolve()
+    }
+
+    @objc func skipToNext(_ call: CAPPluginCall) {
+        queuePlayer?.skipToNext()
+        call.resolve()
+    }
+
+    @objc func skipToPrevious(_ call: CAPPluginCall) {
+        queuePlayer?.skipToPrevious()
+        call.resolve()
+    }
+
+    @objc func skipToIndex(_ call: CAPPluginCall) {
+        guard let index = call.getInt("index") else {
+            call.reject("index is required.")
+            return
+        }
+        let pos = call.getDouble("positionSeconds")
+        queuePlayer?.skipToIndex(index, positionSeconds: pos)
+        call.resolve()
     }
 
     @objc func setVolume(_ call: CAPPluginCall) {
-        do {
-            guard let volume = call.getFloat("volume") else {
-                throw AudioPlayerError.invalidSeekTime
-            }
-
-            try getAudioSource(methodName: "setVolume", call: call).setVolume(
-                volume: volume
-            )
-
-            call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
+        guard let volume = call.getDouble("volume") else {
+            call.reject("volume is required.")
             return
-        } catch {
-            call.reject(
-                "There was an issue setting the audio volume.",
-                nil,
-                error
-            )
         }
+        queuePlayer?.setVolume(volume)
+        call.resolve()
     }
 
     @objc func setRate(_ call: CAPPluginCall) {
-        do {
-            guard let rate = call.getFloat("rate") else {
-                throw AudioPlayerError.invalidRate
+        guard let rate = call.getDouble("rate") else {
+            call.reject("rate is required.")
+            return
+        }
+        queuePlayer?.setRate(rate)
+        call.resolve()
+    }
+
+    @objc func getState(_ call: CAPPluginCall) {
+        call.resolve(queuePlayer?.getStateResult() ?? [
+            "stateRevision": 0,
+            "queueRevision": 0,
+            "status": "stopped",
+            "currentIndex": 0,
+            "currentItemId": NSNull(),
+            "position": 0,
+            "rate": 1,
+            "volume": 100,
+            "repeatMode": "off",
+            "shuffle": false
+        ])
+    }
+
+    @objc func setItemProgress(_ call: CAPPluginCall) {
+        guard let itemId = call.getString("itemId"),
+              let positionSeconds = call.getDouble("positionSeconds")
+        else {
+            call.reject("itemId and positionSeconds are required.")
+            return
+        }
+        let durationSeconds = call.getDouble("durationSeconds")
+        let completed = call.getBool("completed")
+        queuePlayer?.setItemProgress(itemId: itemId, positionSeconds: positionSeconds, durationSeconds: durationSeconds, completed: completed)
+        call.resolve()
+    }
+
+    @objc func getItemProgress(_ call: CAPPluginCall) {
+        guard let itemId = call.getString("itemId") else {
+            call.reject("itemId is required.")
+            return
+        }
+        let prog = queuePlayer?.getItemProgress(itemId: itemId)
+        call.resolve([
+            "itemId": prog?.itemId ?? itemId,
+            "positionSeconds": prog?.positionSeconds ?? 0,
+            "durationSeconds": prog?.durationSeconds as Any,
+            "completed": prog?.completed as Any,
+            "updatedAtEpochMs": prog?.updatedAtEpochMs ?? Int64(Date().timeIntervalSince1970 * 1000)
+        ])
+    }
+
+    @objc func setPlaybackOptions(_ call: CAPPluginCall) {
+        // Merge into current options.
+        guard let qp = queuePlayer else { call.resolve(); return }
+        var updated = qp.options
+        if let v = call.getDouble("previousThresholdSeconds") { updated.previousThresholdSeconds = v }
+        if let v = call.getDouble("skipForwardSeconds") { updated.skipForwardSeconds = v }
+        if let v = call.getDouble("skipBackwardSeconds") { updated.skipBackwardSeconds = v }
+        if let v = call.getBool("enableNextPrev") { updated.enableNextPrev = v }
+        if let v = call.getBool("enableSeekTo") { updated.enableSeekTo = v }
+        if let v = call.getBool("enableSkipForwardBackward") { updated.enableSkipForwardBackward = v }
+        if let v = call.getBool("enableStop") { updated.enableStop = v }
+        if let v = call.getString("androidNotificationSmallIcon") { updated.androidNotificationSmallIcon = v }
+        qp.setPlaybackOptions(updated)
+        call.resolve()
+    }
+
+    @objc func getPlaybackOptions(_ call: CAPPluginCall) {
+        guard let qp = queuePlayer else { call.resolve([:]); return }
+        call.resolve([
+            "previousThresholdSeconds": qp.options.previousThresholdSeconds,
+            "skipForwardSeconds": qp.options.skipForwardSeconds,
+            "skipBackwardSeconds": qp.options.skipBackwardSeconds,
+            "enableNextPrev": qp.options.enableNextPrev,
+            "enableSeekTo": qp.options.enableSeekTo,
+            "enableSkipForwardBackward": qp.options.enableSkipForwardBackward,
+            "enableStop": qp.options.enableStop,
+            "androidNotificationSmallIcon": qp.options.androidNotificationSmallIcon as Any
+        ])
+    }
+
+    @objc func setRepeatMode(_ call: CAPPluginCall) {
+        guard let qp = queuePlayer else { call.resolve(); return }
+        guard let repeatMode = call.getString("repeatMode") else {
+            call.reject("repeatMode is required.")
+            return
+        }
+        qp.setRepeatMode(repeatMode)
+        call.resolve()
+    }
+
+    @objc func setShuffle(_ call: CAPPluginCall) {
+        guard let qp = queuePlayer else { call.resolve(); return }
+        guard let shuffle = call.getBool("shuffle") else {
+            call.reject("shuffle is required.")
+            return
+        }
+        qp.setShuffle(shuffle)
+        call.resolve()
+    }
+
+    // MARK: - Parsing helpers
+
+    private func parseQueueItems(_ call: CAPPluginCall) throws -> [QueueItem] {
+        guard let arr = call.getArray("items") else { return [] }
+        var out: [QueueItem] = []
+        for (index, any) in arr.enumerated() {
+            guard let obj = any as? [String: Any] else {
+                throw NSError(
+                    domain: "AudioPlayerPlugin",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "Queue item at index \(index) is not an object."]
+                )
             }
-
-            try getAudioSource(methodName: "setRate", call: call).setRate(
-                rate: rate
-            )
-
-            call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject(
-                "There was an issue setting the rate of the audio.",
-                nil,
-                error
-            )
-        }
-    }
-
-    @objc func isPlaying(_ call: CAPPluginCall) {
-        do {
-            let isPlaying = try getAudioSource(
-                methodName: "isPlaying",
-                call: call
-            ).isPlaying()
-
-            call.resolve(["isPlaying": isPlaying])
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject(
-                "There was an issue getting the playing status of the audio.",
-                nil,
-                error
-            )
-        }
-    }
-
-    @objc func destroy(_ call: CAPPluginCall) {
-        do {
-            let audioSource = try getAudioSource(
-                methodName: "destroy",
-                call: call
-            )
-
-            if audioSource.useForNotification {
-                try audioSession.setActive(false)
+            guard let id = obj["id"] as? String else {
+                throw NSError(
+                    domain: "AudioPlayerPlugin",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "Queue item at index \(index) is missing required field 'id'."]
+                )
             }
-
-            audioSource.stop()
-            audioSource.destroy()
-
-            let audioId = try audioId(call)
-
-            audioSources.remove(sourceId: audioId)
-            onLosesFocusCallbackIds.removeValue(forKey: audioId)
-            onGainsFocusCallbackIds.removeValue(forKey: audioId)
-
-            call.resolve()
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject(
-                "There was an issue cleaning up the audio player.",
-                nil,
-                error
-            )
-        }
-    }
-
-    @objc func onAppGainsFocus(_ call: CAPPluginCall) {
-        do {
-            call.keepAlive = true
-            bridge?.saveCall(call)
-
-            onGainsFocusCallbackIds[try audioId(call)] = call.callbackId
-        } catch {
-            call.reject(
-                "There was an issue registering onAppGainsFocus",
-                nil,
-                error
-            )
-        }
-    }
-
-    @objc func onAppLosesFocus(_ call: CAPPluginCall) {
-        do {
-            call.keepAlive = true
-            bridge?.saveCall(call)
-
-            onLosesFocusCallbackIds[try audioId(call)] = call.callbackId
-        } catch {
-            call.reject(
-                "There was an issue registering onAppLosesFocus",
-                nil,
-                error
-            )
-        }
-    }
-
-    @objc func onAudioReady(_ call: CAPPluginCall) {
-        call.keepAlive = true
-        bridge?.saveCall(call)
-
-        do {
-            try getAudioSource(methodName: "onAudioReady", call: call)
-                .setOnReady(callbackId: call.callbackId)
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject(
-                "There was an issue initializing audio ready.",
-                nil,
-                error
-            )
-        }
-    }
-
-    @objc func onAudioEnd(_ call: CAPPluginCall) {
-        call.keepAlive = true
-        bridge?.saveCall(call)
-
-        do {
-            try getAudioSource(methodName: "onAudioEnd", call: call).setOnEnd(
-                callbackId: call.callbackId
-            )
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject(
-                "There was an issue initializing audio end.",
-                nil,
-                error
-            )
-        }
-
-    }
-
-    @objc func onPlaybackStatusChange(_ call: CAPPluginCall) {
-        call.keepAlive = true
-        bridge?.saveCall(call)
-
-        do {
-            try getAudioSource(methodName: "onPlaybackStatusChange", call: call)
-                .setOnPlaybackStatusChange(callbackId: call.callbackId)
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject(
-                "There was an issue initializing playback status change.",
-                nil,
-                error
-            )
-        }
-    }
-
-    @objc func onMetadataUpdate(_ call: CAPPluginCall) {
-        call.keepAlive = true
-        bridge?.saveCall(call)
-
-        do {
-            try getAudioSource(methodName: "onMetadataUpdate", call: call)
-                .audioMetadata
-                .setOnMetadataUpdate(callbackId: call.callbackId)
-        } catch AudioPlayerError.missingAudioSource {
-            return
-        } catch {
-            call.reject(
-                "There was an issue initializing metadata update.",
-                nil,
-                error
-            )
-        }
-    }
-
-    @objc func handleAppToBackground() {
-        print("Going to background")
-
-        makeFocusChangeCallbackCalls(callbackIds: onLosesFocusCallbackIds)
-    }
-
-    @objc func handleAppToForeground() {
-        print("Coming to foreground")
-
-        makeFocusChangeCallbackCalls(callbackIds: onGainsFocusCallbackIds)
-    }
-
-    func audioId(_ call: CAPPluginCall) throws -> String {
-        guard let audioId = call.getString("audioId") else {
-            throw AudioPlayerError.invalidAudioId
-        }
-
-        return audioId
-    }
-
-    func getAudioSource(methodName: String, call: CAPPluginCall) throws
-    -> AudioSource {
-        return try getAudioSource(
-            methodName: methodName,
-            call: call,
-            rejectIfError: true
-        )
-    }
-
-    func getAudioSource(
-        methodName: String,
-        call: CAPPluginCall,
-        rejectIfError: Bool
-    ) throws -> AudioSource {
-        let audioSource = audioSources.get(sourceId: try audioId(call))
-
-        if audioSource == nil {
-            print("Audio source with ID \(try audioId(call)) was not found.")
-
-            if rejectIfError {
-                call.reject(
-                    "There was an issue trying to play the audio (\(methodName))"
+            guard let src = obj["src"] as? String else {
+                throw NSError(
+                    domain: "AudioPlayerPlugin",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "Queue item at index \(index) is missing required field 'src'."]
+                )
+            }
+            guard let title = obj["title"] as? String else {
+                throw NSError(
+                    domain: "AudioPlayerPlugin",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "Queue item at index \(index) is missing required field 'title'."]
                 )
             }
 
-            throw AudioPlayerError.missingAudioSource
-        }
+            var extras: [String: JSONValue]?
+            if let raw = obj["extras"] {
+                if raw is NSNull {
+                    extras = nil
+                } else if let extrasObj = raw as? [String: Any] {
+                    extras = try parseExtras(extrasObj)
+                } else {
+                    throw NSError(
+                        domain: "AudioPlayerPlugin",
+                        code: 400,
+                        userInfo: [NSLocalizedDescriptionKey: "Queue item at index \(index) field 'extras' must be an object."]
+                    )
+                }
+            }
 
-        return audioSource!
+            let item = QueueItem(
+                id: id,
+                src: src,
+                title: title,
+                artist: obj["artist"] as? String,
+                album: obj["album"] as? String,
+                artwork: obj["artwork"] as? String,
+                duration: obj["duration"] as? Double,
+                metadataUpdateUrl: obj["metadataUpdateUrl"] as? String,
+                metadataUpdateInterval: obj["metadataUpdateInterval"] as? Int,
+                extras: extras
+            )
+            out.append(item)
+        }
+        return out
     }
 
-    func makeFocusChangeCallbackCalls(callbackIds: [String: String]) {
-        for callbackId in callbackIds.values {
-            bridge?.savedCall(withID: callbackId)?.resolve()
+    private func parseExtras(_ obj: [String: Any]) throws -> [String: JSONValue] {
+        var result: [String: JSONValue] = [:]
+        for (key, value) in obj {
+            result[key] = try convertToJSONValue(value)
         }
+        return result
+    }
+
+    private func convertToJSONValue(_ value: Any) throws -> JSONValue {
+        if value is NSNull { return .null }
+
+        // JSONSerialization/Capacitor often uses NSNumber for both Bool and number.
+        if let n = value as? NSNumber {
+            if CFGetTypeID(n) == CFBooleanGetTypeID() {
+                return .bool(n.boolValue)
+            }
+            return .number(n.doubleValue)
+        }
+        if let s = value as? String { return .string(s) }
+        if let arr = value as? [Any] { return .array(try arr.map { try convertToJSONValue($0) }) }
+        if let dict = value as? [String: Any] {
+            var out: [String: JSONValue] = [:]
+            for (k, v) in dict {
+                out[k] = try convertToJSONValue(v)
+            }
+            return .object(out)
+        }
+
+        throw NSError(
+            domain: "AudioPlayerPlugin",
+            code: 400,
+            userInfo: [NSLocalizedDescriptionKey: "Unsupported type in extras: \(type(of: value))"]
+        )
     }
 }
