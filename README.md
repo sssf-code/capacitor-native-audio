@@ -133,6 +133,7 @@ This can be done in XCode or by editing `Info.plist` directly.
 * [`addListener('trackChange', ...)`](#addlistenertrackchange-)
 * [`addListener('queueChange', ...)`](#addlistenerqueuechange-)
 * [`addListener('metadataChange', ...)`](#addlistenermetadatachange-)
+* [`addListener('audioBecomingNoisy', ...)`](#addlisteneraudiobecomingnoisy-)
 * [`removeAllListeners()`](#removealllisteners)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
@@ -473,6 +474,26 @@ addListener(eventName: 'metadataChange', listenerFunc: (event: MetadataChangeEve
 | ------------------ | --------------------------------------------------------------------------------------- |
 | **`eventName`**    | <code>'metadataChange'</code>                                                           |
 | **`listenerFunc`** | <code>(event: <a href="#metadatachangeevent">MetadataChangeEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('audioBecomingNoisy', ...)
+
+```typescript
+addListener(eventName: 'audioBecomingNoisy', listenerFunc: () => void) => Promise<PluginListenerHandle>
+```
+
+Android only. Fires when audio output is about to become noisy
+(e.g. headset/Bluetooth disconnect and playback would switch to speaker).
+On iOS this listener is a no-op and is never emitted.
+
+| Param              | Type                              |
+| ------------------ | --------------------------------- |
+| **`eventName`**    | <code>'audioBecomingNoisy'</code> |
+| **`listenerFunc`** | <code>() =&gt; void</code>        |
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 

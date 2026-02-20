@@ -452,6 +452,29 @@
         "slug": "addlistenermetadatachange-"
       },
       {
+        "name": "addListener",
+        "signature": "(eventName: 'audioBecomingNoisy', listenerFunc: () => void) => Promise<PluginListenerHandle>",
+        "parameters": [
+          {
+            "name": "eventName",
+            "docs": "",
+            "type": "'audioBecomingNoisy'"
+          },
+          {
+            "name": "listenerFunc",
+            "docs": "",
+            "type": "() => void"
+          }
+        ],
+        "returns": "Promise<PluginListenerHandle>",
+        "tags": [],
+        "docs": "Android only. Fires when audio output is about to become noisy\n(e.g. headset/Bluetooth disconnect and playback would switch to speaker).\nOn iOS this listener is a no-op and is never emitted.",
+        "complexTypes": [
+          "PluginListenerHandle"
+        ],
+        "slug": "addlisteneraudiobecomingnoisy-"
+      },
+      {
         "name": "removeAllListeners",
         "signature": "() => Promise<void>",
         "parameters": [],
