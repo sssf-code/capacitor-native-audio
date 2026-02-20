@@ -1,7 +1,12 @@
 package ssf.capacitorjs.plugins.nativeaudio;
 
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.media.AudioManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -36,10 +41,14 @@ public class AudioPlayerPlugin extends Plugin {
     private long lastQueueRevision = 0;
     private String lastCurrentItemId = null;
 
+    private BroadcastReceiver audioBecomingNoisyReceiver;
+    private boolean audioBecomingNoisyReceiverRegistered;
+
     @Override
     public void load() {
         super.load();
         ensureController(null);
+        registerAudioBecomingNoisyReceiver();
     }
 
     @Override
@@ -502,7 +511,54 @@ public class AudioPlayerPlugin extends Plugin {
         });
     }
 
+    private void registerAudioBecomingNoisyReceiver() {
+        if (audioBecomingNoisyReceiverRegistered) return;
+        Context context = getContext();
+        if (context == null) return;
+        if (audioBecomingNoisyReceiver == null) {
+            audioBecomingNoisyReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
+                        mainHandler.post(() -> notifyListeners("audioBecomingNoisy", new JSObject()));
+                    }
+                }
+            };
+        }
+        IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                context.registerReceiver(audioBecomingNoisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+                audioBecomingNoisyReceiverRegistered = true;
+            } catch (Exception ignored) {
+                audioBecomingNoisyReceiver = null;
+                audioBecomingNoisyReceiverRegistered = false;
+            }
+        } else {
+            try {
+                context.registerReceiver(audioBecomingNoisyReceiver, filter);
+                audioBecomingNoisyReceiverRegistered = true;
+            } catch (Exception ignored) {
+                audioBecomingNoisyReceiver = null;
+                audioBecomingNoisyReceiverRegistered = false;
+            }
+        }
+    }
+
+    private void unregisterAudioBecomingNoisyReceiver() {
+        if (!audioBecomingNoisyReceiverRegistered || audioBecomingNoisyReceiver == null) return;
+        Context context = getContext();
+        if (context != null) {
+            try {
+                context.unregisterReceiver(audioBecomingNoisyReceiver);
+            } catch (Exception ignored) {}
+        }
+        audioBecomingNoisyReceiverRegistered = false;
+        audioBecomingNoisyReceiver = null;
+    }
+
     private void cleanup() {
+        unregisterAudioBecomingNoisyReceiver();
         // Cancel any pending emit callbacks.
         mainHandler.removeCallbacksAndMessages(null);
         emitScheduled = false;

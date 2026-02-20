@@ -227,5 +227,11 @@ export interface AudioPlayerPlugin {
     addListener(eventName: 'trackChange', listenerFunc: (event: TrackChangeEvent) => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'queueChange', listenerFunc: (event: QueueChangeEvent) => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'metadataChange', listenerFunc: (event: MetadataChangeEvent) => void): Promise<PluginListenerHandle>;
+    /**
+     * Android only. Fires when audio output is about to become noisy
+     * (e.g. headset/Bluetooth disconnect and playback would switch to speaker).
+     * On iOS this listener is a no-op and is never emitted.
+     */
+    addListener(eventName: 'audioBecomingNoisy', listenerFunc: () => void): Promise<PluginListenerHandle>;
     removeAllListeners(): Promise<void>;
 }
