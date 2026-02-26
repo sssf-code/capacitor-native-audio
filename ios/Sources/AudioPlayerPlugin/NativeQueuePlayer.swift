@@ -39,6 +39,8 @@ final class NativeQueuePlayer {
 
     private var isReleased = false
 
+    private let seekTimescale: CMTimeScale = 600
+
     init(plugin: AudioPlayerPlugin, store: QueueStore = QueueStore()) {
         self.plugin = plugin
         self.store = store
@@ -256,7 +258,7 @@ final class NativeQueuePlayer {
 
     func seek(positionSeconds: Double) {
         let pos = max(0, positionSeconds)
-        player.seek(to: CMTime(seconds: pos, preferredTimescale: 600))
+        player.seek(to: CMTime(seconds: pos, preferredTimescale: seekTimescale))
         state.position = pos
         bumpStateRevision()
         persist()
@@ -474,7 +476,7 @@ final class NativeQueuePlayer {
 
             let desiredPos = max(0, desiredPositionSeconds ?? 0)
             if desiredPos > 0 {
-                player.seek(to: CMTime(seconds: desiredPos, preferredTimescale: 600))
+                player.seek(to: CMTime(seconds: desiredPos, preferredTimescale: seekTimescale))
             }
 
             isStopped = true
@@ -563,7 +565,7 @@ final class NativeQueuePlayer {
 
         let desiredPos = max(0, desiredPositionSeconds ?? 0)
         if desiredPos > 0 {
-            player.seek(to: CMTime(seconds: desiredPos, preferredTimescale: 600))
+            player.seek(to: CMTime(seconds: desiredPos, preferredTimescale: seekTimescale))
         }
 
         isStopped = true
@@ -783,18 +785,24 @@ final class NativeQueuePlayer {
         // Last track ended: pause at end and keep queue/session active so user can seek and play again.
         // Only explicit stop() (e.g. close button) should deactivate the audio session.
         player.pause()
-        if endedPosition > 0 {
-            player.seek(to: CMTime(seconds: endedPosition, preferredTimescale: 600))
-        }
         isStopped = false
         state.status = .paused
         state.position = endedPosition
         state.duration = endedDuration
         bumpStateRevision()
         persist()
-        notifyStateChange()
-        refreshNowPlaying()
         stopMetadataPolling()
+        // Notify after seek completes so published position matches the actual player time.
+        let notifyAfterSeek = { [weak self] in
+            guard let self else { return }
+            self.notifyStateChange()
+            self.refreshNowPlaying()
+        }
+        if endedPosition > 0 {
+            player.seek(to: CMTime(seconds: endedPosition, preferredTimescale: seekTimescale)) { _ in notifyAfterSeek() }
+        } else {
+            notifyAfterSeek()
+        }
     }
 
     private func updateStateFromPlayer() {
