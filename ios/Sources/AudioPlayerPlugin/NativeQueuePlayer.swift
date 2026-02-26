@@ -39,10 +39,12 @@ final class NativeQueuePlayer {
 
     private var isReleased = false
 
+    private let seekTimescale: CMTimeScale = 600
+
     init(plugin: AudioPlayerPlugin, store: QueueStore = QueueStore()) {
         self.plugin = plugin
         self.store = store
-        player.actionAtItemEnd = .advance
+        player.actionAtItemEnd = .none
 
         setupAudioSession()
         setupRemoteCommands()
@@ -256,7 +258,7 @@ final class NativeQueuePlayer {
 
     func seek(positionSeconds: Double) {
         let pos = max(0, positionSeconds)
-        player.seek(to: CMTime(seconds: pos, preferredTimescale: 600))
+        player.seek(to: CMTime(seconds: pos, preferredTimescale: seekTimescale))
         state.position = pos
         bumpStateRevision()
         persist()
@@ -474,7 +476,7 @@ final class NativeQueuePlayer {
 
             let desiredPos = max(0, desiredPositionSeconds ?? 0)
             if desiredPos > 0 {
-                player.seek(to: CMTime(seconds: desiredPos, preferredTimescale: 600))
+                player.seek(to: CMTime(seconds: desiredPos, preferredTimescale: seekTimescale))
             }
 
             isStopped = true
@@ -563,7 +565,7 @@ final class NativeQueuePlayer {
 
         let desiredPos = max(0, desiredPositionSeconds ?? 0)
         if desiredPos > 0 {
-            player.seek(to: CMTime(seconds: desiredPos, preferredTimescale: 600))
+            player.seek(to: CMTime(seconds: desiredPos, preferredTimescale: seekTimescale))
         }
 
         isStopped = true
@@ -759,7 +761,8 @@ final class NativeQueuePlayer {
         }
 
         if idx + 1 < queue.count {
-            // AVQueuePlayer will likely advance automatically, but we also bump state for persistence/JS resync.
+            // Advance to next item manually (actionAtItemEnd is .none).
+            player.advanceToNextItem()
             state.currentIndex = idx + 1
             state.currentItemId = queue[idx + 1].id
             isStopped = false
@@ -769,6 +772,7 @@ final class NativeQueuePlayer {
             notifyTrackChange()
             notifyStateChange()
             refreshNowPlaying()
+            startMetadataPollingIfNeeded()
             return
         }
 
@@ -778,14 +782,46 @@ final class NativeQueuePlayer {
             return
         }
 
-        stop()
+        // Last track ended: pause at end and keep queue/session active so user can seek and play again.
+        // Only explicit stop() (e.g. close button) should deactivate the audio session.
+        player.pause()
+        isStopped = false
+        state.status = .paused
+        state.position = endedPosition
+        state.duration = endedDuration
+        bumpStateRevision()
+        persist()
+        stopMetadataPolling()
+        // Notify after seek completes so published position matches the actual player time.
+        let notifyAfterSeek = { [weak self] in
+            guard let self else { return }
+            self.notifyStateChange()
+            self.refreshNowPlaying()
+        }
+        if endedPosition > 0 {
+            player.seek(to: CMTime(seconds: endedPosition, preferredTimescale: seekTimescale)) { _ in notifyAfterSeek() }
+        } else {
+            notifyAfterSeek()
+        }
     }
 
     private func updateStateFromPlayer() {
-        let pos = player.currentTime().seconds
+        guard let currentItem = player.currentItem else {
+            if player.timeControlStatus == .playing || player.rate > 0 {
+                state.status = .playing
+            } else if isStopped {
+                state.status = .stopped
+            } else {
+                state.status = .paused
+            }
+            return
+        }
+
+        let pos = currentItem.currentTime().seconds
         if pos.isFinite { state.position = max(0, pos) }
 
-        if let duration = player.currentItem?.duration.seconds, duration.isFinite, duration > 0 {
+        let duration = currentItem.duration.seconds
+        if duration.isFinite, duration > 0 {
             state.duration = duration
         } else {
             state.duration = nil
