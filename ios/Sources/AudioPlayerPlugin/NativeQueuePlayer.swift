@@ -42,7 +42,7 @@ final class NativeQueuePlayer {
     init(plugin: AudioPlayerPlugin, store: QueueStore = QueueStore()) {
         self.plugin = plugin
         self.store = store
-        player.actionAtItemEnd = .advance
+        player.actionAtItemEnd = .none
 
         setupAudioSession()
         setupRemoteCommands()
@@ -759,7 +759,8 @@ final class NativeQueuePlayer {
         }
 
         if idx + 1 < queue.count {
-            // AVQueuePlayer will likely advance automatically, but we also bump state for persistence/JS resync.
+            // Advance to next item manually (actionAtItemEnd is .none).
+            player.advanceToNextItem()
             state.currentIndex = idx + 1
             state.currentItemId = queue[idx + 1].id
             isStopped = false
@@ -769,6 +770,7 @@ final class NativeQueuePlayer {
             notifyTrackChange()
             notifyStateChange()
             refreshNowPlaying()
+            startMetadataPollingIfNeeded()
             return
         }
 
@@ -778,14 +780,40 @@ final class NativeQueuePlayer {
             return
         }
 
-        stop()
+        // Last track ended: pause at end and keep queue/session active so user can seek and play again.
+        // Only explicit stop() (e.g. close button) should deactivate the audio session.
+        player.pause()
+        if endedPosition > 0 {
+            player.seek(to: CMTime(seconds: endedPosition, preferredTimescale: 600))
+        }
+        isStopped = false
+        state.status = .paused
+        state.position = endedPosition
+        state.duration = endedDuration
+        bumpStateRevision()
+        persist()
+        notifyStateChange()
+        refreshNowPlaying()
+        stopMetadataPolling()
     }
 
     private func updateStateFromPlayer() {
-        let pos = player.currentTime().seconds
+        guard let currentItem = player.currentItem else {
+            if player.timeControlStatus == .playing || player.rate > 0 {
+                state.status = .playing
+            } else if isStopped {
+                state.status = .stopped
+            } else {
+                state.status = .paused
+            }
+            return
+        }
+
+        let pos = currentItem.currentTime().seconds
         if pos.isFinite { state.position = max(0, pos) }
 
-        if let duration = player.currentItem?.duration.seconds, duration.isFinite, duration > 0 {
+        let duration = currentItem.duration.seconds
+        if duration.isFinite, duration > 0 {
             state.duration = duration
         } else {
             state.duration = nil
