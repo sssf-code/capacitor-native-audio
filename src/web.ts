@@ -229,7 +229,7 @@ export class AudioPlayerWeb extends WebPlugin {
             const audio = this.audio;
             if (audio) {
                 audio.currentTime = 0;
-                void audio.play();
+                audio.play().catch(() => {});
             }
             return;
         }
@@ -237,13 +237,13 @@ export class AudioPlayerWeb extends WebPlugin {
         if (this.repeatMode === 'all' && !hasNext && this.items.length > 0) {
             this.loadItemByIndex(0);
             this.emitTrackChange();
-            void this.audio?.play();
+            this.audio?.play().catch(() => {});
             return;
         }
         if (hasNext) {
             this.loadItemByIndex(this.currentIndex + 1);
             this.emitTrackChange();
-            void this.audio?.play();
+            this.audio?.play().catch(() => {});
         } else {
             this.setStatus('stopped');
         }
@@ -263,6 +263,9 @@ export class AudioPlayerWeb extends WebPlugin {
         this.setupMediaSessionHandlers();
         this.updatePositionState(true);
         this.emitStateChange();
+        if (this.status === 'playing') {
+            this.startMetadataPollingIfNeeded();
+        }
     }
 
     private applyPlaybackRate(audio: HTMLAudioElement): void {
@@ -859,7 +862,7 @@ export class AudioPlayerWeb extends WebPlugin {
         if (nextIndex !== this.currentIndex) {
             this.loadItemByIndex(nextIndex);
             this.emitTrackChange();
-            if (this.status === 'playing') void this.audio?.play();
+            if (this.status === 'playing') this.audio?.play().catch(() => {});
         }
     }
 
@@ -878,7 +881,7 @@ export class AudioPlayerWeb extends WebPlugin {
         if (prevIndex !== this.currentIndex) {
             this.loadItemByIndex(prevIndex);
             this.emitTrackChange();
-            if (this.status === 'playing') void this.audio?.play();
+            if (this.status === 'playing') this.audio?.play().catch(() => {});
         } else if (audio) {
             audio.currentTime = 0;
             this.emitStateChange();
@@ -901,7 +904,7 @@ export class AudioPlayerWeb extends WebPlugin {
             this.audio.currentTime = params.positionSeconds;
         }
         this.emitTrackChange();
-        if (this.status === 'playing') void this.audio?.play();
+        if (this.status === 'playing') this.audio?.play().catch(() => {});
     }
 
     async setRate(params: SetRateParams): Promise<void> {

@@ -105,11 +105,11 @@ This can be done in XCode or by editing `Info.plist` directly.
 
 When running in the browser (Capacitor web or PWA), the plugin uses a full JavaScript implementation so the same API works without native code:
 
-- **Queue:** In-memory queue; `setQueue`, `getQueue`, `addQueueItems`, `removeQueueItem`, `moveQueueItem`, `clearQueue`, and `syncQueue` (replace mode) are supported.
+- **Queue:** In-memory queue; `setQueue`, `getQueue`, `addQueueItems`, `removeQueueItem`, `moveQueueItem`, `clearQueue`, and `syncQueue` (supports `replace` and `patch` modes) are supported.
 - **Playback:** Single `HTMLAudioElement`; advancing to the next track on `ended`, with repeat modes (off / one / all) and optional shuffle.
 - **Media Session:** Metadata (title, artist, album, artwork) and action handlers (play, pause, seek, next/previous) are wired to the browser’s Media Session so OS and lock-screen controls work.
 - **State and events:** `getState()`, `stateChange`, `trackChange`, and `queueChange` behave like on native. Position is reported via a short polling interval while playing.
-- **Limitations:** `audioBecomingNoisy` is not emitted on web. `setItemProgress` / `getItemProgress` use in-memory storage (not shared with native persistence).
+- **Limitations:** `audioBecomingNoisy` is not emitted on web. `setItemProgress` / `getItemProgress` persist progress to `localStorage` on web (not shared with native persistence).
 
 # API
 
