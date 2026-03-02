@@ -4,10 +4,9 @@
 
 Unified **native queue player** (playlist + media session) for Capacitor apps.
 
-- Native owns playback + OS media controls (works while WebView is suspended)
-- React/JS owns the queue definition while foregrounded
-- Queue + position + options are persisted so state survives restarts
-- Foreground UI reconciles via `getState()` / `getQueue()`
+- **Native (iOS/Android):** Native owns playback + OS media controls (works while WebView is suspended). Queue + position + options are persisted so state survives restarts.
+- **Web:** Full in-browser implementation using a single `HTMLAudioElement`, in-memory queue, and the [Media Session API](https://developer.mozilla.org/en-US/docs/Web/API/Media_Session_API) for lock screen / OS controls. Same API as native; no separate web-only code path in your app.
+- Foreground UI reconciles via `getState()` / `getQueue()` on all platforms.
 
 ## Install
 
@@ -101,6 +100,16 @@ This can be done in XCode or by editing `Info.plist` directly.
     <!-- OTHER STUFF -->
 </dict>
 ```
+
+# Web
+
+When running in the browser (Capacitor web or PWA), the plugin uses a full JavaScript implementation so the same API works without native code:
+
+- **Queue:** In-memory queue; `setQueue`, `getQueue`, `addQueueItems`, `removeQueueItem`, `moveQueueItem`, `clearQueue`, and `syncQueue` (replace mode) are supported.
+- **Playback:** Single `HTMLAudioElement`; advancing to the next track on `ended`, with repeat modes (off / one / all) and optional shuffle.
+- **Media Session:** Metadata (title, artist, album, artwork) and action handlers (play, pause, seek, next/previous) are wired to the browser’s Media Session so OS and lock-screen controls work.
+- **State and events:** `getState()`, `stateChange`, `trackChange`, and `queueChange` behave like on native. Position is reported via a short polling interval while playing.
+- **Limitations:** `audioBecomingNoisy` is not emitted on web. `setItemProgress` / `getItemProgress` use in-memory storage (not shared with native persistence).
 
 # API
 
