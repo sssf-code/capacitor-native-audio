@@ -3,6 +3,7 @@ import type { PluginListenerHandle } from '@capacitor/core';
 
 import type {
     AddQueueItemsParams,
+    AudioPlayerPlugin,
     GetItemProgressParams,
     GetQueueResult,
     ItemProgress,
@@ -43,7 +44,7 @@ const STATE_POLL_MS = 600;
 const POSITION_STATE_THROTTLE_MS = 400;
 const ITEM_PROGRESS_STORAGE_PREFIX = 'cap_native_audio:itemProgress:v1:';
 
-export class AudioPlayerWeb extends WebPlugin {
+export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
     private items: QueueItem[] = [];
     private baseItems: QueueItem[] = [];
     private currentIndex = 0;
@@ -77,7 +78,6 @@ export class AudioPlayerWeb extends WebPlugin {
 
     private metadataTimer: ReturnType<typeof setInterval> | null = null;
     private lastMetadataFingerprint: string | null = null;
-    private metadataItemId: string | null = null;
 
     constructor() {
         super();
@@ -554,7 +554,21 @@ export class AudioPlayerWeb extends WebPlugin {
             audio.load();
             this.applyPlaybackRate(audio);
             if (params.startPositionSeconds != null && params.startPositionSeconds > 0) {
-                audio.currentTime = params.startPositionSeconds;
+                const seekTo = params.startPositionSeconds;
+                try {
+                    audio.currentTime = seekTo;
+                } catch {
+                    // Some browsers throw if metadata isn't loaded yet; defer the seek.
+                    const onLoadedMetadata = () => {
+                        audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                        try {
+                            audio.currentTime = seekTo;
+                        } catch {
+                            // Ignore seek errors after metadata is loaded; queue is still valid.
+                        }
+                    };
+                    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+                }
             }
             this.updateMediaSessionMetadata(item);
             this.setupMediaSessionHandlers();
@@ -569,6 +583,7 @@ export class AudioPlayerWeb extends WebPlugin {
         }
         this.emitStateChange();
         this.emitQueueChange();
+        this.emitTrackChange();
     }
 
     async syncQueue(params: SyncQueueParams): Promise<SyncQueueResult> {
@@ -578,7 +593,9 @@ export class AudioPlayerWeb extends WebPlugin {
             params.expectedQueueRevision !== this.queueRevision &&
             !force
         ) {
-            return { queueRevision: this.queueRevision };
+            throw new Error(
+                `Queue revision mismatch: expected ${params.expectedQueueRevision}, actual ${this.queueRevision}`
+            );
         }
 
         if (params.mode === 'replace') {
@@ -681,6 +698,7 @@ export class AudioPlayerWeb extends WebPlugin {
             this.rebuildEffectiveQueue(desiredId);
             this.loadItemByIndex(this.currentIndex);
             this.setStatus('stopped');
+            this.emitTrackChange();
         }
 
         this.queueRevision++;
@@ -1027,6 +1045,11 @@ export class AudioPlayerWeb extends WebPlugin {
             this.updateMediaSessionMetadata(current);
             this.setupMediaSessionHandlers();
         }
+        // If rebuilding the queue due to shuffle toggling changed the active item,
+        // emit a trackChange event so listeners are aware of the new track.
+        if (current?.id !== desiredCurrentItemId) {
+            this.emitTrackChange();
+        }
         this.emitQueueChange();
         this.emitStateChange();
     }
@@ -1043,7 +1066,6 @@ export class AudioPlayerWeb extends WebPlugin {
         if (!url.trim()) return;
 
         const intervalSeconds = Math.max(5, item.metadataUpdateInterval ?? 15);
-        this.metadataItemId = item.id;
         this.lastMetadataFingerprint = null;
 
         this.metadataTimer = setInterval(() => {
@@ -1056,7 +1078,6 @@ export class AudioPlayerWeb extends WebPlugin {
             clearInterval(this.metadataTimer);
             this.metadataTimer = null;
         }
-        this.metadataItemId = null;
         this.lastMetadataFingerprint = null;
     }
 
@@ -1066,15 +1087,19 @@ export class AudioPlayerWeb extends WebPlugin {
         if (this.items[this.currentIndex]?.id !== itemId) return;
 
         let data: unknown;
+        let timeout: ReturnType<typeof setTimeout> | undefined;
         try {
             const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-            const timeout = setTimeout(() => controller?.abort(), 5000);
+            timeout = setTimeout(() => controller?.abort(), 5000);
             const res = await fetch(url, { signal: controller?.signal });
-            clearTimeout(timeout);
             if (!res.ok) return;
             data = await res.json();
         } catch {
             return;
+        } finally {
+            if (timeout !== undefined) {
+                clearTimeout(timeout);
+            }
         }
 
         if (token !== this.playToken) return;

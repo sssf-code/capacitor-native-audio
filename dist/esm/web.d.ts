@@ -1,7 +1,7 @@
 import { WebPlugin } from '@capacitor/core';
 import type { PluginListenerHandle } from '@capacitor/core';
-import type { AddQueueItemsParams, GetItemProgressParams, GetQueueResult, ItemProgress, MetadataChangeEvent, PlaybackOptions, PlayerState, QueueChangeEvent, RemoveQueueItemParams, SeekParams, SetItemProgressParams, SetPlaybackOptionsParams, SetQueueParams, SetRateParams, SetRepeatModeParams, SetShuffleParams, SetVolumeParams, SkipToIndexParams, SyncQueueParams, SyncQueueResult, MoveQueueItemParams, TrackChangeEvent } from './definitions';
-export declare class AudioPlayerWeb extends WebPlugin {
+import type { AddQueueItemsParams, AudioPlayerPlugin, GetItemProgressParams, GetQueueResult, ItemProgress, MetadataChangeEvent, PlaybackOptions, PlayerState, QueueChangeEvent, RemoveQueueItemParams, SeekParams, SetItemProgressParams, SetPlaybackOptionsParams, SetQueueParams, SetRateParams, SetRepeatModeParams, SetShuffleParams, SetVolumeParams, SkipToIndexParams, SyncQueueParams, SyncQueueResult, MoveQueueItemParams, TrackChangeEvent } from './definitions';
+export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
     private items;
     private baseItems;
     private currentIndex;
@@ -28,7 +28,6 @@ export declare class AudioPlayerWeb extends WebPlugin {
     private lastPositionStateUpdateMs;
     private metadataTimer;
     private lastMetadataFingerprint;
-    private metadataItemId;
     constructor();
     private bumpPlayToken;
     private ensureAudio;
