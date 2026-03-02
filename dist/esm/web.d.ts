@@ -1,6 +1,41 @@
 import { WebPlugin } from '@capacitor/core';
-import type { AudioPlayerPlugin, AddQueueItemsParams, GetItemProgressParams, GetQueueResult, ItemProgress, PlaybackOptions, PlayerState, RemoveQueueItemParams, SeekParams, SetItemProgressParams, SetPlaybackOptionsParams, SetQueueParams, SetRateParams, SetRepeatModeParams, SetShuffleParams, SetVolumeParams, SkipToIndexParams, SyncQueueParams, SyncQueueResult, MoveQueueItemParams } from './definitions';
-export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
+import type { PluginListenerHandle } from '@capacitor/core';
+import type { AddQueueItemsParams, GetItemProgressParams, GetQueueResult, ItemProgress, MetadataChangeEvent, PlaybackOptions, PlayerState, QueueChangeEvent, RemoveQueueItemParams, SeekParams, SetItemProgressParams, SetPlaybackOptionsParams, SetQueueParams, SetRateParams, SetRepeatModeParams, SetShuffleParams, SetVolumeParams, SkipToIndexParams, SyncQueueParams, SyncQueueResult, MoveQueueItemParams, TrackChangeEvent } from './definitions';
+export declare class AudioPlayerWeb extends WebPlugin {
+    private items;
+    private currentIndex;
+    private queueRevision;
+    private stateRevision;
+    private status;
+    private rate;
+    private volumePercent;
+    private repeatMode;
+    private shuffle;
+    private playbackOptions;
+    private progressMap;
+    private audio;
+    private statePollTimer;
+    private stateChangeListeners;
+    private trackChangeListeners;
+    private queueChangeListeners;
+    private metadataChangeListeners;
+    private audioBecomingNoisyListeners;
+    constructor();
+    private ensureAudio;
+    private setStatus;
+    private onAudioEnded;
+    private loadItemByIndex;
+    private updateMediaSessionMetadata;
+    private setupMediaSessionHandlers;
+    private getPosition;
+    private getDuration;
+    private buildPlayerState;
+    private emitStateChange;
+    private emitTrackChange;
+    private emitQueueChange;
+    private startStatePolling;
+    private stopStatePolling;
+    private createListenerHandle;
     setQueue(params: SetQueueParams): Promise<void>;
     syncQueue(params: SyncQueueParams): Promise<SyncQueueResult>;
     getQueue(): Promise<GetQueueResult>;
@@ -24,4 +59,10 @@ export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlug
     getPlaybackOptions(): Promise<PlaybackOptions>;
     setRepeatMode(params: SetRepeatModeParams): Promise<void>;
     setShuffle(params: SetShuffleParams): Promise<void>;
+    addListener(eventName: 'stateChange', listenerFunc: (state: PlayerState) => void): Promise<PluginListenerHandle>;
+    addListener(eventName: 'trackChange', listenerFunc: (event: TrackChangeEvent) => void): Promise<PluginListenerHandle>;
+    addListener(eventName: 'queueChange', listenerFunc: (event: QueueChangeEvent) => void): Promise<PluginListenerHandle>;
+    addListener(eventName: 'metadataChange', listenerFunc: (event: MetadataChangeEvent) => void): Promise<PluginListenerHandle>;
+    addListener(eventName: 'audioBecomingNoisy', listenerFunc: () => void): Promise<PluginListenerHandle>;
+    removeAllListeners(): Promise<void>;
 }

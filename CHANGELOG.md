@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased](https://github.com/mediagrid/capacitor-native-audio/compare/v3.0.0...HEAD)
+## [Unreleased](https://github.com/mediagrid/capacitor-native-audio/compare/v4.1.0...HEAD)
+
+## [v4.1.0](https://github.com/mediagrid/capacitor-native-audio/compare/v4.0.2...v4.1.0) - 2026-03-01
+
+### Added
+
+- **Web implementation:** Full in-browser support so the same plugin API works on web and native. The web implementation uses a single `HTMLAudioElement`, an in-memory queue, and the Media Session API for lock screen / OS controls. Queue, playback, state, and events (`stateChange`, `trackChange`, `queueChange`) match native behavior. Item progress is stored in-memory on web. The `audioBecomingNoisy` listener is a no-op on web.
 
 ## [v3.0.0](https://github.com/mediagrid/capacitor-native-audio/compare/v2.3.2...v3.0.0) - 2026-01-23
 
