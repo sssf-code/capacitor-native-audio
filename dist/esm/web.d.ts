@@ -3,6 +3,7 @@ import type { PluginListenerHandle } from '@capacitor/core';
 import type { AddQueueItemsParams, GetItemProgressParams, GetQueueResult, ItemProgress, MetadataChangeEvent, PlaybackOptions, PlayerState, QueueChangeEvent, RemoveQueueItemParams, SeekParams, SetItemProgressParams, SetPlaybackOptionsParams, SetQueueParams, SetRateParams, SetRepeatModeParams, SetShuffleParams, SetVolumeParams, SkipToIndexParams, SyncQueueParams, SyncQueueResult, MoveQueueItemParams, TrackChangeEvent } from './definitions';
 export declare class AudioPlayerWeb extends WebPlugin {
     private items;
+    private baseItems;
     private currentIndex;
     private queueRevision;
     private stateRevision;
@@ -39,6 +40,10 @@ export declare class AudioPlayerWeb extends WebPlugin {
     private onAudioEnded;
     private loadItemByIndex;
     private applyPlaybackRate;
+    private shuffleItems;
+    private buildShuffleQueueFromBase;
+    private rebuildEffectiveQueue;
+    private resolveSrcForCompare;
     private updateMediaSessionMetadata;
     private setupMediaSessionHandlers;
     private getPosition;
