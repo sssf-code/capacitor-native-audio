@@ -9,6 +9,8 @@ const DEFAULT_PLAYBACK_OPTIONS = {
     enableStop: true,
 };
 const STATE_POLL_MS = 600;
+const POSITION_STATE_THROTTLE_MS = 400;
+const ITEM_PROGRESS_STORAGE_PREFIX = 'cap_native_audio:itemProgress:v1:';
 export class AudioPlayerWeb extends WebPlugin {
     constructor() {
         super();
@@ -30,7 +32,20 @@ export class AudioPlayerWeb extends WebPlugin {
         this.queueChangeListeners = [];
         this.metadataChangeListeners = [];
         this.audioBecomingNoisyListeners = [];
+        this.playToken = 0;
+        // Optional audio graph for smooth volume ramping (HTMLAudioElement remains source of truth).
+        this.audioCtx = null;
+        this.audioCtxNode = null;
+        this.gainNode = null;
+        this.lastPositionStateUpdateMs = 0;
+        this.metadataTimer = null;
+        this.lastMetadataFingerprint = null;
+        this.metadataItemId = null;
         this.ensureAudio();
+    }
+    bumpPlayToken() {
+        this.playToken += 1;
+        return this.playToken;
     }
     ensureAudio() {
         if (this.audio)
@@ -45,8 +60,64 @@ export class AudioPlayerWeb extends WebPlugin {
             this.setStatus('paused');
         });
         audio.addEventListener('error', () => this.setStatus('stopped'));
+        audio.addEventListener('timeupdate', () => this.updatePositionState());
+        audio.addEventListener('loadedmetadata', () => this.updatePositionState(true));
+        audio.addEventListener('durationchange', () => this.updatePositionState(true));
         this.audio = audio;
         return audio;
+    }
+    ensureAudioGraph() {
+        var _a, _b;
+        // Lazily create an AudioContext graph for smooth volume ramping.
+        // Some browsers require a user gesture before creating/resuming AudioContext;
+        // fall back to HTMLAudioElement.volume if we can't create it.
+        if (typeof window === 'undefined')
+            return;
+        const audio = this.ensureAudio();
+        if (this.audioCtx && this.gainNode && this.audioCtxNode)
+            return;
+        const Ctx = (_a = window.AudioContext) !== null && _a !== void 0 ? _a : window.webkitAudioContext;
+        if (!Ctx)
+            return;
+        try {
+            const ctx = (_b = this.audioCtx) !== null && _b !== void 0 ? _b : new Ctx();
+            this.audioCtx = ctx;
+            if (!this.audioCtxNode) {
+                this.audioCtxNode = ctx.createMediaElementSource(audio);
+            }
+            if (!this.gainNode) {
+                this.gainNode = ctx.createGain();
+                this.audioCtxNode.connect(this.gainNode);
+                this.gainNode.connect(ctx.destination);
+            }
+            // Prefer gain control as the source of truth when available.
+            audio.volume = 1;
+            this.applyGainVolume(this.volumePercent);
+            if (ctx.state === 'suspended') {
+                void ctx.resume().catch(() => {
+                    // ignore
+                });
+            }
+        }
+        catch (_c) {
+            // ignore
+        }
+    }
+    applyGainVolume(volume0To100) {
+        const ctx = this.audioCtx;
+        const gain = this.gainNode;
+        if (!ctx || !gain)
+            return;
+        const v = Math.max(0, Math.min(100, volume0To100)) / 100;
+        const now = ctx.currentTime;
+        try {
+            gain.gain.cancelScheduledValues(now);
+            gain.gain.setValueAtTime(gain.gain.value, now);
+            gain.gain.linearRampToValueAtTime(v, now + 0.01);
+        }
+        catch (_a) {
+            // ignore
+        }
     }
     setStatus(status) {
         if (this.status === status)
@@ -55,9 +126,54 @@ export class AudioPlayerWeb extends WebPlugin {
         this.emitStateChange();
         if (status === 'playing') {
             this.startStatePolling();
+            this.startMetadataPollingIfNeeded();
         }
         else {
             this.stopStatePolling();
+            this.stopMetadataPolling();
+        }
+        this.updateMediaSessionPlaybackState();
+        this.updatePositionState(true);
+    }
+    updateMediaSessionPlaybackState() {
+        if (typeof navigator === 'undefined' || !navigator.mediaSession)
+            return;
+        try {
+            // 'none' is supported on many browsers; if not, this is a no-op.
+            const ps = this.status === 'playing' ? 'playing' : this.status === 'paused' ? 'paused' : 'none';
+            navigator.mediaSession.playbackState = ps;
+        }
+        catch (_a) {
+            // ignore
+        }
+    }
+    updatePositionState(force = false) {
+        var _a;
+        if (typeof navigator === 'undefined' || !navigator.mediaSession)
+            return;
+        const audio = this.audio;
+        if (!audio)
+            return;
+        const nowMs = Date.now();
+        if (!force && nowMs - this.lastPositionStateUpdateMs < POSITION_STATE_THROTTLE_MS)
+            return;
+        this.lastPositionStateUpdateMs = nowMs;
+        const duration = this.getDuration();
+        if (!(duration > 0) || !isFinite(duration))
+            return;
+        try {
+            // setPositionState is not supported everywhere
+            const ms = navigator.mediaSession;
+            if (typeof ms.setPositionState === 'function') {
+                ms.setPositionState({
+                    duration,
+                    playbackRate: this.rate,
+                    position: Math.max(0, (_a = audio.currentTime) !== null && _a !== void 0 ? _a : 0),
+                });
+            }
+        }
+        catch (_b) {
+            // ignore
         }
     }
     onAudioEnded() {
@@ -94,14 +210,24 @@ export class AudioPlayerWeb extends WebPlugin {
     loadItemByIndex(index) {
         if (index < 0 || index >= this.items.length)
             return;
+        this.bumpPlayToken();
         this.currentIndex = index;
         const item = this.items[index];
         const audio = this.ensureAudio();
         audio.pause();
         audio.src = item.src;
         audio.load();
+        this.applyPlaybackRate(audio);
         this.updateMediaSessionMetadata(item);
+        this.setupMediaSessionHandlers();
+        this.updatePositionState(true);
         this.emitStateChange();
+    }
+    applyPlaybackRate(audio) {
+        // Per spec, calling `load()` resets `playbackRate` to `defaultPlaybackRate`.
+        // Keep both in sync so rate survives track changes.
+        audio.defaultPlaybackRate = this.rate;
+        audio.playbackRate = this.rate;
     }
     updateMediaSessionMetadata(item) {
         if (typeof navigator === 'undefined' || !navigator.mediaSession)
@@ -137,13 +263,20 @@ export class AudioPlayerWeb extends WebPlugin {
                     void this.stop();
                 });
             }
+            else {
+                navigator.mediaSession.setActionHandler('stop', null);
+            }
             if (opts.enableSeekTo) {
                 navigator.mediaSession.setActionHandler('seekto', (details) => {
                     if (this.audio && typeof (details === null || details === void 0 ? void 0 : details.seekTime) === 'number') {
                         this.audio.currentTime = details.seekTime;
                         this.emitStateChange();
+                        this.updatePositionState(true);
                     }
                 });
+            }
+            else {
+                navigator.mediaSession.setActionHandler('seekto', null);
             }
             if (opts.enableSkipForwardBackward) {
                 const fwd = (_a = opts.skipForwardSeconds) !== null && _a !== void 0 ? _a : 10;
@@ -153,6 +286,7 @@ export class AudioPlayerWeb extends WebPlugin {
                         const offset = typeof (details === null || details === void 0 ? void 0 : details.seekOffset) === 'number' ? details.seekOffset : fwd;
                         this.audio.currentTime = Math.min(this.audio.duration || Number.MAX_SAFE_INTEGER, this.audio.currentTime + offset);
                         this.emitStateChange();
+                        this.updatePositionState(true);
                     }
                 });
                 navigator.mediaSession.setActionHandler('seekbackward', (details) => {
@@ -160,8 +294,13 @@ export class AudioPlayerWeb extends WebPlugin {
                         const offset = typeof (details === null || details === void 0 ? void 0 : details.seekOffset) === 'number' ? details.seekOffset : bwd;
                         this.audio.currentTime = Math.max(0, this.audio.currentTime - offset);
                         this.emitStateChange();
+                        this.updatePositionState(true);
                     }
                 });
+            }
+            else {
+                navigator.mediaSession.setActionHandler('seekforward', null);
+                navigator.mediaSession.setActionHandler('seekbackward', null);
             }
             if (opts.enableNextPrev) {
                 navigator.mediaSession.setActionHandler('nexttrack', () => {
@@ -170,6 +309,10 @@ export class AudioPlayerWeb extends WebPlugin {
                 navigator.mediaSession.setActionHandler('previoustrack', () => {
                     void this.skipToPrevious();
                 });
+            }
+            else {
+                navigator.mediaSession.setActionHandler('nexttrack', null);
+                navigator.mediaSession.setActionHandler('previoustrack', null);
             }
         }
         catch (_c) {
@@ -210,6 +353,21 @@ export class AudioPlayerWeb extends WebPlugin {
         this.stateChangeListeners.forEach((fn) => {
             try {
                 fn(state);
+            }
+            catch (_a) {
+                // ignore
+            }
+        });
+    }
+    emitMetadataChange(itemId, metadata) {
+        const event = {
+            stateRevision: this.stateRevision,
+            itemId,
+            metadata,
+        };
+        this.metadataChangeListeners.forEach((fn) => {
+            try {
+                fn(event);
             }
             catch (_a) {
                 // ignore
@@ -278,9 +436,10 @@ export class AudioPlayerWeb extends WebPlugin {
     // --- Queue ---
     async setQueue(params) {
         var _a, _b;
+        const token = this.bumpPlayToken();
         this.items = ((_a = params.items) === null || _a === void 0 ? void 0 : _a.length) ? [...params.items] : [];
         this.queueRevision++;
-        const startIndex = Math.min((_b = params.startIndex) !== null && _b !== void 0 ? _b : 0, Math.max(0, this.items.length - 1));
+        const startIndex = Math.max(0, Math.min((_b = params.startIndex) !== null && _b !== void 0 ? _b : 0, Math.max(0, this.items.length - 1)));
         this.currentIndex = startIndex;
         const audio = this.ensureAudio();
         audio.pause();
@@ -288,14 +447,14 @@ export class AudioPlayerWeb extends WebPlugin {
             const item = this.items[this.currentIndex];
             audio.src = item.src;
             audio.load();
+            this.applyPlaybackRate(audio);
             if (params.startPositionSeconds != null && params.startPositionSeconds > 0) {
                 audio.currentTime = params.startPositionSeconds;
             }
             this.updateMediaSessionMetadata(item);
             this.setupMediaSessionHandlers();
             if (params.autoplay) {
-                this.setStatus('playing');
-                void audio.play();
+                void this.playWithToken(token);
             }
             else {
                 this.setStatus('stopped');
@@ -422,6 +581,7 @@ export class AudioPlayerWeb extends WebPlugin {
         this.emitStateChange();
     }
     async clearQueue() {
+        this.bumpPlayToken();
         this.items = [];
         this.currentIndex = 0;
         this.queueRevision++;
@@ -431,10 +591,21 @@ export class AudioPlayerWeb extends WebPlugin {
             audio.src = '';
         }
         this.setStatus('stopped');
+        this.stopMetadataPolling();
         this.emitQueueChange();
         this.emitStateChange();
     }
     // --- Playback ---
+    async playWithToken(token) {
+        if (token !== this.playToken)
+            return;
+        try {
+            await this.play();
+        }
+        catch (_a) {
+            // ignore autoplay failures
+        }
+    }
     async play() {
         const audio = this.ensureAudio();
         if (this.items.length && !audio.src) {
@@ -442,11 +613,31 @@ export class AudioPlayerWeb extends WebPlugin {
             if (item) {
                 audio.src = item.src;
                 audio.load();
+                this.applyPlaybackRate(audio);
                 this.updateMediaSessionMetadata(item);
+                this.setupMediaSessionHandlers();
             }
         }
-        this.setStatus('playing');
-        await audio.play();
+        const token = this.playToken;
+        try {
+            await audio.play();
+            if (token !== this.playToken)
+                return;
+            // ensure AudioContext gets a chance to resume after a user gesture
+            if (this.audioCtx && this.audioCtx.state === 'suspended') {
+                void this.audioCtx.resume().catch(() => {
+                    // ignore
+                });
+            }
+        }
+        catch (err) {
+            if (token !== this.playToken)
+                return;
+            // If play fails (e.g. user gesture), keep status consistent.
+            if (this.status === 'playing')
+                this.setStatus('paused');
+            throw err instanceof Error ? err : new Error(String(err));
+        }
     }
     async pause() {
         var _a;
@@ -454,13 +645,18 @@ export class AudioPlayerWeb extends WebPlugin {
         this.setStatus('paused');
     }
     async stop() {
+        const wasStopped = this.status === 'stopped';
         const audio = this.audio;
         if (audio) {
             audio.pause();
             audio.currentTime = 0;
         }
         this.setStatus('stopped');
-        this.emitStateChange();
+        if (wasStopped) {
+            // `setStatus()` won't emit if status didn't change, but `stop()` still resets position.
+            this.emitStateChange();
+            this.updatePositionState(true);
+        }
     }
     async seek(params) {
         const audio = this.audio;
@@ -468,6 +664,7 @@ export class AudioPlayerWeb extends WebPlugin {
             return;
         audio.currentTime = Math.max(0, params.positionSeconds);
         this.emitStateChange();
+        this.updatePositionState(true);
     }
     async skipToNext() {
         var _a;
@@ -504,6 +701,7 @@ export class AudioPlayerWeb extends WebPlugin {
         else if (audio) {
             audio.currentTime = 0;
             this.emitStateChange();
+            this.updatePositionState(true);
         }
     }
     async skipToIndex(params) {
@@ -513,6 +711,7 @@ export class AudioPlayerWeb extends WebPlugin {
             if (params.positionSeconds != null && this.audio) {
                 this.audio.currentTime = params.positionSeconds;
                 this.emitStateChange();
+                this.updatePositionState(true);
             }
             return;
         }
@@ -527,20 +726,26 @@ export class AudioPlayerWeb extends WebPlugin {
     async setRate(params) {
         this.rate = Math.max(0.5, Math.min(2, params.rate));
         if (this.audio)
-            this.audio.playbackRate = this.rate;
+            this.applyPlaybackRate(this.audio);
         this.emitStateChange();
+        this.updatePositionState(true);
     }
     async setVolume(params) {
         this.volumePercent = Math.max(0, Math.min(100, params.volume));
-        if (this.audio)
+        this.ensureAudioGraph();
+        if (this.gainNode && this.audioCtx) {
+            this.applyGainVolume(this.volumePercent);
+        }
+        else if (this.audio) {
             this.audio.volume = this.volumePercent / 100;
+        }
         this.emitStateChange();
     }
     // --- State ---
     async getState() {
         return this.buildPlayerState();
     }
-    // --- Progress / bookmarks (in-memory on web) ---
+    // --- Progress / bookmarks (localStorage + in-memory cache on web) ---
     async setItemProgress(params) {
         const progress = {
             itemId: params.itemId,
@@ -550,12 +755,45 @@ export class AudioPlayerWeb extends WebPlugin {
             updatedAtEpochMs: Date.now(),
         };
         this.progressMap.set(params.itemId, progress);
+        try {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.setItem(`${ITEM_PROGRESS_STORAGE_PREFIX}${params.itemId}`, JSON.stringify(progress));
+            }
+        }
+        catch (_a) {
+            // ignore
+        }
     }
     async getItemProgress(params) {
         var _a;
         const stored = this.progressMap.get(params.itemId);
         if (stored)
             return stored;
+        try {
+            if (typeof localStorage !== 'undefined') {
+                const raw = localStorage.getItem(`${ITEM_PROGRESS_STORAGE_PREFIX}${params.itemId}`);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed &&
+                        typeof parsed.itemId === 'string' &&
+                        typeof parsed.positionSeconds === 'number' &&
+                        typeof parsed.updatedAtEpochMs === 'number') {
+                        const progress = {
+                            itemId: parsed.itemId,
+                            positionSeconds: parsed.positionSeconds,
+                            durationSeconds: typeof parsed.durationSeconds === 'number' ? parsed.durationSeconds : undefined,
+                            completed: typeof parsed.completed === 'boolean' ? parsed.completed : undefined,
+                            updatedAtEpochMs: parsed.updatedAtEpochMs,
+                        };
+                        this.progressMap.set(params.itemId, progress);
+                        return progress;
+                    }
+                }
+            }
+        }
+        catch (_b) {
+            // ignore
+        }
         const item = this.items.find((x) => x.id === params.itemId);
         const pos = item && ((_a = this.items[this.currentIndex]) === null || _a === void 0 ? void 0 : _a.id) === params.itemId ? this.getPosition() : 0;
         const dur = item === null || item === void 0 ? void 0 : item.duration;
@@ -582,6 +820,89 @@ export class AudioPlayerWeb extends WebPlugin {
     async setShuffle(params) {
         this.shuffle = params.shuffle;
         this.emitStateChange();
+    }
+    // --- Stream metadata polling (web) ---
+    startMetadataPollingIfNeeded() {
+        var _a;
+        this.stopMetadataPolling();
+        if (this.status !== 'playing')
+            return;
+        const item = this.items[this.currentIndex];
+        if (!(item === null || item === void 0 ? void 0 : item.metadataUpdateUrl))
+            return;
+        const url = String(item.metadataUpdateUrl);
+        if (!url.trim())
+            return;
+        const intervalSeconds = Math.max(5, (_a = item.metadataUpdateInterval) !== null && _a !== void 0 ? _a : 15);
+        this.metadataItemId = item.id;
+        this.lastMetadataFingerprint = null;
+        this.metadataTimer = setInterval(() => {
+            void this.fetchAndApplyStreamMetadata(url, item.id, this.playToken);
+        }, intervalSeconds * 1000);
+    }
+    stopMetadataPolling() {
+        if (this.metadataTimer) {
+            clearInterval(this.metadataTimer);
+            this.metadataTimer = null;
+        }
+        this.metadataItemId = null;
+        this.lastMetadataFingerprint = null;
+    }
+    async fetchAndApplyStreamMetadata(url, itemId, token) {
+        var _a, _b;
+        if (token !== this.playToken)
+            return;
+        if (this.status !== 'playing')
+            return;
+        if (((_a = this.items[this.currentIndex]) === null || _a === void 0 ? void 0 : _a.id) !== itemId)
+            return;
+        let data;
+        try {
+            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const timeout = setTimeout(() => controller === null || controller === void 0 ? void 0 : controller.abort(), 5000);
+            const res = await fetch(url, { signal: controller === null || controller === void 0 ? void 0 : controller.signal });
+            clearTimeout(timeout);
+            if (!res.ok)
+                return;
+            data = await res.json();
+        }
+        catch (_c) {
+            return;
+        }
+        if (token !== this.playToken)
+            return;
+        if (((_b = this.items[this.currentIndex]) === null || _b === void 0 ? void 0 : _b.id) !== itemId)
+            return;
+        const obj = data;
+        const title = typeof (obj === null || obj === void 0 ? void 0 : obj.title) === 'string' ? obj.title : undefined;
+        const artist = typeof (obj === null || obj === void 0 ? void 0 : obj.artist) === 'string' ? obj.artist : undefined;
+        const album = typeof (obj === null || obj === void 0 ? void 0 : obj.album) === 'string' ? obj.album : undefined;
+        const artwork = typeof (obj === null || obj === void 0 ? void 0 : obj.artwork) === 'string' ? obj.artwork : undefined;
+        if (!title && !artist && !album && !artwork)
+            return;
+        const fingerprint = `${title !== null && title !== void 0 ? title : ''}|${artist !== null && artist !== void 0 ? artist : ''}|${album !== null && album !== void 0 ? album : ''}|${artwork !== null && artwork !== void 0 ? artwork : ''}`;
+        if (fingerprint === this.lastMetadataFingerprint)
+            return;
+        this.lastMetadataFingerprint = fingerprint;
+        const current = this.items[this.currentIndex];
+        if (!current)
+            return;
+        const changed = {};
+        if (title && title !== current.title)
+            changed.title = title;
+        if (artist && artist !== current.artist)
+            changed.artist = artist;
+        if (album && album !== current.album)
+            changed.album = album;
+        if (artwork && artwork !== current.artwork)
+            changed.artwork = artwork;
+        if (Object.keys(changed).length === 0)
+            return;
+        this.items[this.currentIndex] = Object.assign(Object.assign({}, current), changed);
+        this.updateMediaSessionMetadata(this.items[this.currentIndex]);
+        // Emit state change first to bump stateRevision, then emit metadataChange with that revision.
+        this.emitStateChange();
+        this.emitMetadataChange(itemId, changed);
     }
     async addListener(eventName, listenerFunc) {
         if (eventName === 'stateChange') {
