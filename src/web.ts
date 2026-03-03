@@ -244,7 +244,8 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             this.emitTrackChange();
             this.audio?.play().catch(() => undefined);
         } else {
-            this.setStatus('stopped');
+            // Match iOS behavior: pause at end so the session stays active and user can seek/play again.
+            this.setStatus('paused');
         }
     }
 
@@ -539,6 +540,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
     // --- Queue ---
 
     async setQueue(params: SetQueueParams): Promise<void> {
+        const statusBefore = this.status;
         const token = this.bumpPlayToken();
         this.baseItems = params.items?.length ? [...params.items] : [];
         this.queueRevision++;
@@ -585,7 +587,10 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             audio.src = '';
             this.setStatus('stopped');
         }
-        this.emitStateChange();
+        // If status didn't change, still emit stateChange to publish new queue/index/position.
+        if (statusBefore === this.status) {
+            this.emitStateChange();
+        }
         this.emitQueueChange();
         if (this.items.length) {
             this.emitTrackChange();
