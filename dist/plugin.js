@@ -47,7 +47,6 @@ var capacitorAudioPlayer = (function (exports, core) {
             this.lastPositionStateUpdateMs = 0;
             this.metadataTimer = null;
             this.lastMetadataFingerprint = null;
-            this.metadataItemId = null;
             this.ensureAudio();
         }
         bumpPlayToken() {
@@ -198,7 +197,7 @@ var capacitorAudioPlayer = (function (exports, core) {
                 const audio = this.audio;
                 if (audio) {
                     audio.currentTime = 0;
-                    void audio.play();
+                    audio.play().catch(() => undefined);
                 }
                 return;
             }
@@ -206,13 +205,13 @@ var capacitorAudioPlayer = (function (exports, core) {
             if (this.repeatMode === 'all' && !hasNext && this.items.length > 0) {
                 this.loadItemByIndex(0);
                 this.emitTrackChange();
-                void ((_a = this.audio) === null || _a === void 0 ? void 0 : _a.play());
+                (_a = this.audio) === null || _a === void 0 ? void 0 : _a.play().catch(() => undefined);
                 return;
             }
             if (hasNext) {
                 this.loadItemByIndex(this.currentIndex + 1);
                 this.emitTrackChange();
-                void ((_b = this.audio) === null || _b === void 0 ? void 0 : _b.play());
+                (_b = this.audio) === null || _b === void 0 ? void 0 : _b.play().catch(() => undefined);
             }
             else {
                 this.setStatus('stopped');
@@ -233,6 +232,10 @@ var capacitorAudioPlayer = (function (exports, core) {
             this.setupMediaSessionHandlers();
             this.updatePositionState(true);
             this.emitStateChange();
+            // If we're already playing and just advanced tracks, restart metadata polling for the new item.
+            if (this.status === 'playing') {
+                this.startMetadataPollingIfNeeded();
+            }
         }
         applyPlaybackRate(audio) {
             // Per spec, calling `load()` resets `playbackRate` to `defaultPlaybackRate`.
@@ -517,7 +520,23 @@ var capacitorAudioPlayer = (function (exports, core) {
                 audio.load();
                 this.applyPlaybackRate(audio);
                 if (params.startPositionSeconds != null && params.startPositionSeconds > 0) {
-                    audio.currentTime = params.startPositionSeconds;
+                    const seekTo = params.startPositionSeconds;
+                    try {
+                        audio.currentTime = seekTo;
+                    }
+                    catch (_d) {
+                        // Some browsers throw if metadata isn't loaded yet; defer the seek.
+                        const onLoadedMetadata = () => {
+                            audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                            try {
+                                audio.currentTime = seekTo;
+                            }
+                            catch (_a) {
+                                // Ignore seek errors after metadata is loaded; queue is still valid.
+                            }
+                        };
+                        audio.addEventListener('loadedmetadata', onLoadedMetadata);
+                    }
                 }
                 this.updateMediaSessionMetadata(item);
                 this.setupMediaSessionHandlers();
@@ -534,6 +553,9 @@ var capacitorAudioPlayer = (function (exports, core) {
             }
             this.emitStateChange();
             this.emitQueueChange();
+            if (this.items.length) {
+                this.emitTrackChange();
+            }
         }
         async syncQueue(params) {
             var _a, _b, _c;
@@ -541,7 +563,7 @@ var capacitorAudioPlayer = (function (exports, core) {
             if (params.expectedQueueRevision != null &&
                 params.expectedQueueRevision !== this.queueRevision &&
                 !force) {
-                return { queueRevision: this.queueRevision };
+                throw new Error(`Queue revision mismatch: expected ${params.expectedQueueRevision}, actual ${this.queueRevision}`);
             }
             if (params.mode === 'replace') {
                 await this.setQueue(params);
@@ -678,7 +700,7 @@ var capacitorAudioPlayer = (function (exports, core) {
                 this.loadItemByIndex(this.currentIndex);
                 this.setStatus(statusBefore);
                 if (statusBefore === 'playing') {
-                    void ((_d = this.audio) === null || _d === void 0 ? void 0 : _d.play());
+                    (_d = this.audio) === null || _d === void 0 ? void 0 : _d.play().catch(() => undefined);
                 }
             }
             const afterCurrentItemId = (_e = this.items[this.currentIndex]) === null || _e === void 0 ? void 0 : _e.id;
@@ -807,7 +829,7 @@ var capacitorAudioPlayer = (function (exports, core) {
                 this.loadItemByIndex(nextIndex);
                 this.emitTrackChange();
                 if (this.status === 'playing')
-                    void ((_a = this.audio) === null || _a === void 0 ? void 0 : _a.play());
+                    (_a = this.audio) === null || _a === void 0 ? void 0 : _a.play().catch(() => undefined);
             }
         }
         async skipToPrevious() {
@@ -828,7 +850,7 @@ var capacitorAudioPlayer = (function (exports, core) {
                 this.loadItemByIndex(prevIndex);
                 this.emitTrackChange();
                 if (this.status === 'playing')
-                    void ((_c = this.audio) === null || _c === void 0 ? void 0 : _c.play());
+                    (_c = this.audio) === null || _c === void 0 ? void 0 : _c.play().catch(() => undefined);
             }
             else if (audio) {
                 audio.currentTime = 0;
@@ -853,7 +875,7 @@ var capacitorAudioPlayer = (function (exports, core) {
             }
             this.emitTrackChange();
             if (this.status === 'playing')
-                void ((_a = this.audio) === null || _a === void 0 ? void 0 : _a.play());
+                (_a = this.audio) === null || _a === void 0 ? void 0 : _a.play().catch(() => undefined);
         }
         async setRate(params) {
             this.rate = Math.max(0.5, Math.min(2, params.rate));
@@ -966,6 +988,10 @@ var capacitorAudioPlayer = (function (exports, core) {
                 this.updateMediaSessionMetadata(current);
                 this.setupMediaSessionHandlers();
             }
+            // If toggling shuffle changed the active item, emit a trackChange.
+            if ((current === null || current === void 0 ? void 0 : current.id) && desiredCurrentItemId && current.id !== desiredCurrentItemId) {
+                this.emitTrackChange();
+            }
             this.emitQueueChange();
             this.emitStateChange();
         }
@@ -982,7 +1008,6 @@ var capacitorAudioPlayer = (function (exports, core) {
             if (!url.trim())
                 return;
             const intervalSeconds = Math.max(5, (_a = item.metadataUpdateInterval) !== null && _a !== void 0 ? _a : 15);
-            this.metadataItemId = item.id;
             this.lastMetadataFingerprint = null;
             this.metadataTimer = setInterval(() => {
                 void this.fetchAndApplyStreamMetadata(url, item.id, this.playToken);
@@ -993,7 +1018,6 @@ var capacitorAudioPlayer = (function (exports, core) {
                 clearInterval(this.metadataTimer);
                 this.metadataTimer = null;
             }
-            this.metadataItemId = null;
             this.lastMetadataFingerprint = null;
         }
         async fetchAndApplyStreamMetadata(url, itemId, token) {
@@ -1005,17 +1029,22 @@ var capacitorAudioPlayer = (function (exports, core) {
             if (((_a = this.items[this.currentIndex]) === null || _a === void 0 ? void 0 : _a.id) !== itemId)
                 return;
             let data;
+            let timeout;
             try {
                 const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-                const timeout = setTimeout(() => controller === null || controller === void 0 ? void 0 : controller.abort(), 5000);
+                timeout = setTimeout(() => controller === null || controller === void 0 ? void 0 : controller.abort(), 5000);
                 const res = await fetch(url, { signal: controller === null || controller === void 0 ? void 0 : controller.signal });
-                clearTimeout(timeout);
                 if (!res.ok)
                     return;
                 data = await res.json();
             }
             catch (_c) {
                 return;
+            }
+            finally {
+                if (timeout !== undefined) {
+                    clearTimeout(timeout);
+                }
             }
             if (token !== this.playToken)
                 return;
