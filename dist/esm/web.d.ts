@@ -69,6 +69,7 @@ export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlug
     seek(params: SeekParams): Promise<void>;
     skipToNext(): Promise<void>;
     skipToPrevious(): Promise<void>;
+    private setCurrentTimeSafely;
     skipToIndex(params: SkipToIndexParams): Promise<void>;
     setRate(params: SetRateParams): Promise<void>;
     setVolume(params: SetVolumeParams): Promise<void>;

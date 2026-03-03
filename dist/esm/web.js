@@ -515,6 +515,7 @@ export class AudioPlayerWeb extends WebPlugin {
             this.applyPlaybackRate(audio);
             if (params.startPositionSeconds != null && params.startPositionSeconds > 0) {
                 const seekTo = params.startPositionSeconds;
+                const seekToken = token;
                 try {
                     audio.currentTime = seekTo;
                 }
@@ -522,6 +523,8 @@ export class AudioPlayerWeb extends WebPlugin {
                     // Some browsers throw if metadata isn't loaded yet; defer the seek.
                     const onLoadedMetadata = () => {
                         audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                        if (seekToken !== this.playToken)
+                            return;
                         try {
                             audio.currentTime = seekTo;
                         }
@@ -751,6 +754,8 @@ export class AudioPlayerWeb extends WebPlugin {
         }
     }
     async play() {
+        if (this.items.length === 0)
+            return;
         const audio = this.ensureAudio();
         if (this.items.length && !audio.src) {
             const item = this.items[this.currentIndex];
@@ -806,7 +811,30 @@ export class AudioPlayerWeb extends WebPlugin {
         const audio = this.audio;
         if (!audio)
             return;
-        audio.currentTime = Math.max(0, params.positionSeconds);
+        const targetTime = Math.max(0, params.positionSeconds);
+        try {
+            audio.currentTime = targetTime;
+        }
+        catch (err) {
+            const domErr = err;
+            if (domErr && domErr.name === 'InvalidStateError') {
+                const onLoadedMetadata = () => {
+                    audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                    try {
+                        audio.currentTime = targetTime;
+                    }
+                    catch (_a) {
+                        // If seeking still fails after metadata loads, ignore to avoid noisy errors.
+                        return;
+                    }
+                    this.emitStateChange();
+                    this.updatePositionState(true);
+                };
+                audio.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+                return;
+            }
+            throw err instanceof Error ? err : new Error(String(err));
+        }
         this.emitStateChange();
         this.updatePositionState(true);
     }
@@ -852,20 +880,48 @@ export class AudioPlayerWeb extends WebPlugin {
             this.updatePositionState(true);
         }
     }
+    setCurrentTimeSafely(positionSeconds) {
+        const audio = this.audio;
+        if (!audio)
+            return;
+        const clamped = Math.max(0, positionSeconds);
+        const applyTime = () => {
+            try {
+                audio.currentTime = clamped;
+            }
+            catch (_a) {
+                // Ignore errors setting currentTime; behavior will depend on the browser.
+            }
+        };
+        if (audio.readyState >= 1) {
+            applyTime();
+        }
+        else {
+            const onLoadedMetadata = () => {
+                applyTime();
+            };
+            audio.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+            // Re-check in case readyState changed before the listener was registered.
+            if (audio.readyState >= 1) {
+                audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                applyTime();
+            }
+        }
+    }
     async skipToIndex(params) {
         var _a;
         const index = Math.max(0, Math.min(params.index, this.items.length - 1));
         if (index === this.currentIndex) {
-            if (params.positionSeconds != null && this.audio) {
-                this.audio.currentTime = params.positionSeconds;
+            if (params.positionSeconds != null) {
+                this.setCurrentTimeSafely(params.positionSeconds);
                 this.emitStateChange();
                 this.updatePositionState(true);
             }
             return;
         }
         this.loadItemByIndex(index);
-        if (params.positionSeconds != null && this.audio) {
-            this.audio.currentTime = params.positionSeconds;
+        if (params.positionSeconds != null) {
+            this.setCurrentTimeSafely(params.positionSeconds);
         }
         this.emitTrackChange();
         if (this.status === 'playing')
