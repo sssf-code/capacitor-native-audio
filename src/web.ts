@@ -3,6 +3,7 @@ import type { PluginListenerHandle } from '@capacitor/core';
 
 import type {
     AddQueueItemsParams,
+    AudioPlayerPlugin,
     GetItemProgressParams,
     GetQueueResult,
     ItemProgress,
@@ -43,7 +44,7 @@ const STATE_POLL_MS = 600;
 const POSITION_STATE_THROTTLE_MS = 400;
 const ITEM_PROGRESS_STORAGE_PREFIX = 'cap_native_audio:itemProgress:v1:';
 
-export class AudioPlayerWeb extends WebPlugin {
+export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
     private items: QueueItem[] = [];
     private baseItems: QueueItem[] = [];
     private currentIndex = 0;
@@ -77,8 +78,6 @@ export class AudioPlayerWeb extends WebPlugin {
 
     private metadataTimer: ReturnType<typeof setInterval> | null = null;
     private lastMetadataFingerprint: string | null = null;
-    private metadataItemId: string | null = null;
-
     constructor() {
         super();
         this.ensureAudio();
@@ -229,7 +228,7 @@ export class AudioPlayerWeb extends WebPlugin {
             const audio = this.audio;
             if (audio) {
                 audio.currentTime = 0;
-                void audio.play();
+                audio.play().catch(() => undefined);
             }
             return;
         }
@@ -237,13 +236,13 @@ export class AudioPlayerWeb extends WebPlugin {
         if (this.repeatMode === 'all' && !hasNext && this.items.length > 0) {
             this.loadItemByIndex(0);
             this.emitTrackChange();
-            void this.audio?.play();
+            this.audio?.play().catch(() => undefined);
             return;
         }
         if (hasNext) {
             this.loadItemByIndex(this.currentIndex + 1);
             this.emitTrackChange();
-            void this.audio?.play();
+            this.audio?.play().catch(() => undefined);
         } else {
             this.setStatus('stopped');
         }
@@ -263,6 +262,10 @@ export class AudioPlayerWeb extends WebPlugin {
         this.setupMediaSessionHandlers();
         this.updatePositionState(true);
         this.emitStateChange();
+        // If we're already playing and just advanced tracks, restart metadata polling for the new item.
+        if (this.status === 'playing') {
+            this.startMetadataPollingIfNeeded();
+        }
     }
 
     private applyPlaybackRate(audio: HTMLAudioElement): void {
@@ -551,7 +554,21 @@ export class AudioPlayerWeb extends WebPlugin {
             audio.load();
             this.applyPlaybackRate(audio);
             if (params.startPositionSeconds != null && params.startPositionSeconds > 0) {
-                audio.currentTime = params.startPositionSeconds;
+                const seekTo = params.startPositionSeconds;
+                try {
+                    audio.currentTime = seekTo;
+                } catch {
+                    // Some browsers throw if metadata isn't loaded yet; defer the seek.
+                    const onLoadedMetadata = () => {
+                        audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                        try {
+                            audio.currentTime = seekTo;
+                        } catch {
+                            // Ignore seek errors after metadata is loaded; queue is still valid.
+                        }
+                    };
+                    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+                }
             }
             this.updateMediaSessionMetadata(item);
             this.setupMediaSessionHandlers();
@@ -566,6 +583,9 @@ export class AudioPlayerWeb extends WebPlugin {
         }
         this.emitStateChange();
         this.emitQueueChange();
+        if (this.items.length) {
+            this.emitTrackChange();
+        }
     }
 
     async syncQueue(params: SyncQueueParams): Promise<SyncQueueResult> {
@@ -575,7 +595,9 @@ export class AudioPlayerWeb extends WebPlugin {
             params.expectedQueueRevision !== this.queueRevision &&
             !force
         ) {
-            return { queueRevision: this.queueRevision };
+            throw new Error(
+                `Queue revision mismatch: expected ${params.expectedQueueRevision}, actual ${this.queueRevision}`
+            );
         }
 
         if (params.mode === 'replace') {
@@ -729,7 +751,7 @@ export class AudioPlayerWeb extends WebPlugin {
             this.loadItemByIndex(this.currentIndex);
             this.setStatus(statusBefore);
             if (statusBefore === 'playing') {
-                void this.audio?.play();
+                    this.audio?.play().catch(() => undefined);
             }
         }
 
@@ -859,7 +881,7 @@ export class AudioPlayerWeb extends WebPlugin {
         if (nextIndex !== this.currentIndex) {
             this.loadItemByIndex(nextIndex);
             this.emitTrackChange();
-            if (this.status === 'playing') void this.audio?.play();
+            if (this.status === 'playing') this.audio?.play().catch(() => undefined);
         }
     }
 
@@ -878,7 +900,7 @@ export class AudioPlayerWeb extends WebPlugin {
         if (prevIndex !== this.currentIndex) {
             this.loadItemByIndex(prevIndex);
             this.emitTrackChange();
-            if (this.status === 'playing') void this.audio?.play();
+            if (this.status === 'playing') this.audio?.play().catch(() => undefined);
         } else if (audio) {
             audio.currentTime = 0;
             this.emitStateChange();
@@ -901,7 +923,7 @@ export class AudioPlayerWeb extends WebPlugin {
             this.audio.currentTime = params.positionSeconds;
         }
         this.emitTrackChange();
-        if (this.status === 'playing') void this.audio?.play();
+        if (this.status === 'playing') this.audio?.play().catch(() => undefined);
     }
 
     async setRate(params: SetRateParams): Promise<void> {
@@ -1024,6 +1046,10 @@ export class AudioPlayerWeb extends WebPlugin {
             this.updateMediaSessionMetadata(current);
             this.setupMediaSessionHandlers();
         }
+        // If toggling shuffle changed the active item, emit a trackChange.
+        if (current?.id && desiredCurrentItemId && current.id !== desiredCurrentItemId) {
+            this.emitTrackChange();
+        }
         this.emitQueueChange();
         this.emitStateChange();
     }
@@ -1040,7 +1066,6 @@ export class AudioPlayerWeb extends WebPlugin {
         if (!url.trim()) return;
 
         const intervalSeconds = Math.max(5, item.metadataUpdateInterval ?? 15);
-        this.metadataItemId = item.id;
         this.lastMetadataFingerprint = null;
 
         this.metadataTimer = setInterval(() => {
@@ -1053,7 +1078,6 @@ export class AudioPlayerWeb extends WebPlugin {
             clearInterval(this.metadataTimer);
             this.metadataTimer = null;
         }
-        this.metadataItemId = null;
         this.lastMetadataFingerprint = null;
     }
 
@@ -1063,15 +1087,19 @@ export class AudioPlayerWeb extends WebPlugin {
         if (this.items[this.currentIndex]?.id !== itemId) return;
 
         let data: unknown;
+        let timeout: ReturnType<typeof setTimeout> | undefined;
         try {
             const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-            const timeout = setTimeout(() => controller?.abort(), 5000);
+            timeout = setTimeout(() => controller?.abort(), 5000);
             const res = await fetch(url, { signal: controller?.signal });
-            clearTimeout(timeout);
             if (!res.ok) return;
             data = await res.json();
         } catch {
             return;
+        } finally {
+            if (timeout !== undefined) {
+                clearTimeout(timeout);
+            }
         }
 
         if (token !== this.playToken) return;
