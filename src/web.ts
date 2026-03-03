@@ -199,7 +199,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         this.lastPositionStateUpdateMs = nowMs;
 
         const duration = this.getDuration();
-        if (!(duration > 0) || !isFinite(duration)) return;
+        if (duration == null) return;
 
         try {
             // setPositionState is not supported everywhere
@@ -424,14 +424,16 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         return this.audio?.currentTime ?? 0;
     }
 
-    private getDuration(): number {
+    private getDuration(): number | undefined {
         const d = this.audio?.duration;
-        if (d != null && isFinite(d)) return d;
+        if (d != null && isFinite(d) && d > 0) return d;
         const item = this.items[this.currentIndex];
-        return item?.duration ?? 0;
+        const itemDur = item?.duration;
+        return itemDur != null && itemDur > 0 ? itemDur : undefined;
     }
 
     private buildPlayerState(): PlayerState {
+        const duration = this.getDuration();
         return {
             stateRevision: this.stateRevision,
             queueRevision: this.queueRevision,
@@ -439,7 +441,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             currentIndex: this.currentIndex,
             currentItemId: this.items[this.currentIndex]?.id,
             position: this.getPosition(),
-            duration: this.getDuration(),
+            ...(duration != null ? { duration } : {}),
             rate: this.rate,
             volume: this.volumePercent,
             repeatMode: this.repeatMode,
@@ -855,7 +857,13 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         const audio = this.audio;
         if (audio) {
             audio.pause();
-            audio.currentTime = 0;
+            if (audio.readyState > 0 || audio.src) {
+                try {
+                    audio.currentTime = 0;
+                } catch {
+                    // ignore
+                }
+            }
         }
         this.setStatus('stopped');
         if (wasStopped) {
@@ -983,7 +991,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
     }
 
     async setRate(params: SetRateParams): Promise<void> {
-        this.rate = Math.max(0.5, Math.min(2, params.rate));
+        this.rate = Math.max(0.25, Math.min(4, params.rate));
         if (this.audio) this.applyPlaybackRate(this.audio);
         this.emitStateChange();
         this.updatePositionState(true);
