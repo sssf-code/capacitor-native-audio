@@ -169,7 +169,7 @@ var capacitorAudioPlayer = (function (exports, core) {
                 return;
             this.lastPositionStateUpdateMs = nowMs;
             const duration = this.getDuration();
-            if (!(duration > 0) || !isFinite(duration))
+            if (duration == null)
                 return;
             try {
                 // setPositionState is not supported everywhere
@@ -394,28 +394,18 @@ var capacitorAudioPlayer = (function (exports, core) {
             return (_b = (_a = this.audio) === null || _a === void 0 ? void 0 : _a.currentTime) !== null && _b !== void 0 ? _b : 0;
         }
         getDuration() {
-            var _a, _b;
+            var _a;
             const d = (_a = this.audio) === null || _a === void 0 ? void 0 : _a.duration;
-            if (d != null && isFinite(d))
+            if (d != null && isFinite(d) && d > 0)
                 return d;
             const item = this.items[this.currentIndex];
-            return (_b = item === null || item === void 0 ? void 0 : item.duration) !== null && _b !== void 0 ? _b : 0;
+            const itemDur = item === null || item === void 0 ? void 0 : item.duration;
+            return itemDur != null && itemDur > 0 ? itemDur : undefined;
         }
         buildPlayerState() {
             var _a;
-            return {
-                stateRevision: this.stateRevision,
-                queueRevision: this.queueRevision,
-                status: this.status,
-                currentIndex: this.currentIndex,
-                currentItemId: (_a = this.items[this.currentIndex]) === null || _a === void 0 ? void 0 : _a.id,
-                position: this.getPosition(),
-                duration: this.getDuration(),
-                rate: this.rate,
-                volume: this.volumePercent,
-                repeatMode: this.repeatMode,
-                shuffle: this.shuffle,
-            };
+            const duration = this.getDuration();
+            return Object.assign(Object.assign({ stateRevision: this.stateRevision, queueRevision: this.queueRevision, status: this.status, currentIndex: this.currentIndex, currentItemId: (_a = this.items[this.currentIndex]) === null || _a === void 0 ? void 0 : _a.id, position: this.getPosition() }, (duration != null ? { duration } : {})), { rate: this.rate, volume: this.volumePercent, repeatMode: this.repeatMode, shuffle: this.shuffle });
         }
         emitStateChange() {
             this.stateRevision++;
@@ -804,7 +794,14 @@ var capacitorAudioPlayer = (function (exports, core) {
             const audio = this.audio;
             if (audio) {
                 audio.pause();
-                audio.currentTime = 0;
+                if (audio.readyState > 0 || audio.src) {
+                    try {
+                        audio.currentTime = 0;
+                    }
+                    catch (_a) {
+                        // ignore
+                    }
+                }
             }
             this.setStatus('stopped');
             if (wasStopped) {
@@ -933,7 +930,7 @@ var capacitorAudioPlayer = (function (exports, core) {
                 (_a = this.audio) === null || _a === void 0 ? void 0 : _a.play().catch(() => undefined);
         }
         async setRate(params) {
-            this.rate = Math.max(0.5, Math.min(2, params.rate));
+            this.rate = Math.max(0.25, Math.min(4, params.rate));
             if (this.audio)
                 this.applyPlaybackRate(this.audio);
             this.emitStateChange();
