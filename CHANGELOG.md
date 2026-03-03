@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased](https://github.com/mediagrid/capacitor-native-audio/compare/v4.1.0...HEAD)
 
-## [v4.1.0](https://github.com/mediagrid/capacitor-native-audio/compare/v4.0.2...v4.1.0) - 2026-03-01
+## [v4.1.0](https://github.com/mediagrid/capacitor-native-audio/compare/v4.0.3...v4.1.0) - 2026-03-01
 
 ### Added
 
