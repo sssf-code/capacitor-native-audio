@@ -215,7 +215,8 @@ class AudioPlayerWeb extends core.WebPlugin {
             (_b = this.audio) === null || _b === void 0 ? void 0 : _b.play().catch(() => undefined);
         }
         else {
-            this.setStatus('stopped');
+            // Match iOS behavior: pause at end so the session stays active and user can seek/play again.
+            this.setStatus('paused');
         }
     }
     loadItemByIndex(index) {
@@ -497,6 +498,7 @@ class AudioPlayerWeb extends core.WebPlugin {
     // --- Queue ---
     async setQueue(params) {
         var _a, _b, _c;
+        const statusBefore = this.status;
         const token = this.bumpPlayToken();
         this.baseItems = ((_a = params.items) === null || _a === void 0 ? void 0 : _a.length) ? [...params.items] : [];
         this.queueRevision++;
@@ -545,7 +547,10 @@ class AudioPlayerWeb extends core.WebPlugin {
             audio.src = '';
             this.setStatus('stopped');
         }
-        this.emitStateChange();
+        // If status didn't change, still emit stateChange to publish new queue/index/position.
+        if (statusBefore === this.status) {
+            this.emitStateChange();
+        }
         this.emitQueueChange();
         if (this.items.length) {
             this.emitTrackChange();
