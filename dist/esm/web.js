@@ -208,7 +208,7 @@ export class AudioPlayerWeb extends WebPlugin {
             (_b = this.audio) === null || _b === void 0 ? void 0 : _b.play().catch(() => undefined);
         }
         else {
-            this.setStatus('stopped');
+            this.setStatus('paused');
         }
     }
     loadItemByIndex(index) {
@@ -529,16 +529,22 @@ export class AudioPlayerWeb extends WebPlugin {
             this.setupMediaSessionHandlers();
             if (params.autoplay) {
                 void this.playWithToken(token);
+                this.emitStateChange();
             }
             else {
+                const statusBefore = this.status;
                 this.setStatus('stopped');
+                if (statusBefore === 'stopped')
+                    this.emitStateChange();
             }
         }
         else {
             audio.src = '';
+            const statusBefore = this.status;
             this.setStatus('stopped');
+            if (statusBefore === 'stopped')
+                this.emitStateChange();
         }
-        this.emitStateChange();
         this.emitQueueChange();
         if (this.items.length) {
             this.emitTrackChange();

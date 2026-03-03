@@ -244,7 +244,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             this.emitTrackChange();
             this.audio?.play().catch(() => undefined);
         } else {
-            this.setStatus('stopped');
+            this.setStatus('paused');
         }
     }
 
@@ -578,14 +578,18 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             this.setupMediaSessionHandlers();
             if (params.autoplay) {
                 void this.playWithToken(token);
+                this.emitStateChange();
             } else {
+                const statusBefore = this.status;
                 this.setStatus('stopped');
+                if (statusBefore === 'stopped') this.emitStateChange();
             }
         } else {
             audio.src = '';
+            const statusBefore = this.status;
             this.setStatus('stopped');
+            if (statusBefore === 'stopped') this.emitStateChange();
         }
-        this.emitStateChange();
         this.emitQueueChange();
         if (this.items.length) {
             this.emitTrackChange();
