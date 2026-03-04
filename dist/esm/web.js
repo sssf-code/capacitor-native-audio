@@ -303,7 +303,7 @@ export class AudioPlayerWeb extends WebPlugin {
                 artist: item.artist || '',
                 album: item.album || '',
                 artwork: item.artwork
-                    ? [{ src: item.artwork, sizes: '512x512', type: 'image/png' }]
+                    ? [{ src: item.artwork }]
                     : [],
             });
         }
@@ -524,7 +524,7 @@ export class AudioPlayerWeb extends WebPlugin {
                             // Ignore seek errors after metadata is loaded; queue is still valid.
                         }
                     };
-                    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+                    audio.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
                 }
             }
             this.updateMediaSessionMetadata(item);
@@ -712,10 +712,13 @@ export class AudioPlayerWeb extends WebPlugin {
         if (fromIndex < 0 ||
             fromIndex >= this.baseItems.length ||
             toIndex < 0 ||
-            toIndex >= this.baseItems.length)
+            toIndex > this.baseItems.length)
             return;
         const [item] = this.baseItems.splice(fromIndex, 1);
-        this.baseItems.splice(toIndex, 0, item);
+        if (!item)
+            return;
+        const clampedIndex = Math.min(Math.max(toIndex, 0), this.baseItems.length);
+        this.baseItems.splice(clampedIndex, 0, item);
         this.queueRevision++;
         this.rebuildEffectiveQueue(desiredCurrentItemId);
         this.emitQueueChange();
@@ -981,10 +984,11 @@ export class AudioPlayerWeb extends WebPlugin {
                     const parsed = JSON.parse(raw);
                     if (parsed &&
                         typeof parsed.itemId === 'string' &&
+                        parsed.itemId === params.itemId &&
                         typeof parsed.positionSeconds === 'number' &&
                         typeof parsed.updatedAtEpochMs === 'number') {
                         const progress = {
-                            itemId: parsed.itemId,
+                            itemId: params.itemId,
                             positionSeconds: parsed.positionSeconds,
                             durationSeconds: typeof parsed.durationSeconds === 'number' ? parsed.durationSeconds : undefined,
                             completed: typeof parsed.completed === 'boolean' ? parsed.completed : undefined,
