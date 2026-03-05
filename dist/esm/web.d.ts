@@ -1,6 +1,27 @@
 import { WebPlugin } from '@capacitor/core';
 import type { AudioPlayerPlugin, AddQueueItemsParams, GetItemProgressParams, GetQueueResult, ItemProgress, PlaybackOptions, PlayerState, RemoveQueueItemParams, SeekParams, SetItemProgressParams, SetPlaybackOptionsParams, SetQueueParams, SetRateParams, SetRepeatModeParams, SetShuffleParams, SetVolumeParams, SkipToIndexParams, SyncQueueParams, SyncQueueResult, MoveQueueItemParams } from './definitions';
 export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
+    private audio;
+    private queue;
+    private currentIndex;
+    private stateRevision;
+    private queueRevision;
+    private status;
+    private rate;
+    private volume;
+    private repeatMode;
+    private shuffle;
+    private playbackOptions;
+    private progress;
+    private ensureAudio;
+    private bumpStateRevision;
+    private bumpQueueRevision;
+    private getCurrentItem;
+    private updateMediaSessionMetadata;
+    private loadCurrent;
+    private handleEnded;
+    private notifyStateFromElement;
+    private buildState;
     setQueue(params: SetQueueParams): Promise<void>;
     syncQueue(params: SyncQueueParams): Promise<SyncQueueResult>;
     getQueue(): Promise<GetQueueResult>;
@@ -12,6 +33,7 @@ export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlug
     pause(): Promise<void>;
     stop(): Promise<void>;
     seek(params: SeekParams): Promise<void>;
+    private skipToPreviousInternal;
     skipToNext(): Promise<void>;
     skipToPrevious(): Promise<void>;
     skipToIndex(params: SkipToIndexParams): Promise<void>;
