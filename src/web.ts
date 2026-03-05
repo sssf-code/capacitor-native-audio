@@ -343,7 +343,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
                 artist: item.artist || '',
                 album: item.album || '',
                 artwork: item.artwork
-                    ? [{ src: item.artwork, sizes: '512x512', type: 'image/png' }]
+                    ? [{ src: item.artwork }]
                     : [],
             });
         } catch {
@@ -573,7 +573,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
                             // Ignore seek errors after metadata is loaded; queue is still valid.
                         }
                     };
-                    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+                    audio.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
                 }
             }
             this.updateMediaSessionMetadata(item);
@@ -782,11 +782,13 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             fromIndex < 0 ||
             fromIndex >= this.baseItems.length ||
             toIndex < 0 ||
-            toIndex >= this.baseItems.length
+            toIndex > this.baseItems.length
         )
             return;
         const [item] = this.baseItems.splice(fromIndex, 1);
-        this.baseItems.splice(toIndex, 0, item);
+        if (!item) return;
+        const clampedIndex = Math.min(toIndex, this.baseItems.length);
+        this.baseItems.splice(clampedIndex, 0, item);
         this.queueRevision++;
         this.rebuildEffectiveQueue(desiredCurrentItemId);
         this.emitQueueChange();
@@ -1053,11 +1055,12 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
                     if (
                         parsed &&
                         typeof parsed.itemId === 'string' &&
+                        parsed.itemId === params.itemId &&
                         typeof parsed.positionSeconds === 'number' &&
                         typeof parsed.updatedAtEpochMs === 'number'
                     ) {
                         const progress: ItemProgress = {
-                            itemId: parsed.itemId,
+                            itemId: params.itemId,
                             positionSeconds: parsed.positionSeconds,
                             durationSeconds:
                                 typeof parsed.durationSeconds === 'number' ? parsed.durationSeconds : undefined,
