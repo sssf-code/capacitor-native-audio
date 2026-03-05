@@ -107,37 +107,37 @@ This can be done in XCode or by editing `Info.plist` directly.
 
 <docgen-index>
 
-- [`setQueue(...)`](#setqueue)
-- [`syncQueue(...)`](#syncqueue)
-- [`getQueue()`](#getqueue)
-- [`addQueueItems(...)`](#addqueueitems)
-- [`removeQueueItem(...)`](#removequeueitem)
-- [`moveQueueItem(...)`](#movequeueitem)
-- [`clearQueue()`](#clearqueue)
-- [`play()`](#play)
-- [`pause()`](#pause)
-- [`stop()`](#stop)
-- [`seek(...)`](#seek)
-- [`skipToNext()`](#skiptonext)
-- [`skipToPrevious()`](#skiptoprevious)
-- [`skipToIndex(...)`](#skiptoindex)
-- [`setRate(...)`](#setrate)
-- [`setVolume(...)`](#setvolume)
-- [`getState()`](#getstate)
-- [`setItemProgress(...)`](#setitemprogress)
-- [`getItemProgress(...)`](#getitemprogress)
-- [`setPlaybackOptions(...)`](#setplaybackoptions)
-- [`getPlaybackOptions()`](#getplaybackoptions)
-- [`setRepeatMode(...)`](#setrepeatmode)
-- [`setShuffle(...)`](#setshuffle)
-- [`addListener('stateChange', ...)`](#addlistenerstatechange-)
-- [`addListener('trackChange', ...)`](#addlistenertrackchange-)
-- [`addListener('queueChange', ...)`](#addlistenerqueuechange-)
-- [`addListener('metadataChange', ...)`](#addlistenermetadatachange-)
-- [`addListener('audioBecomingNoisy', ...)`](#addlisteneraudiobecomingnoisy-)
-- [`removeAllListeners()`](#removealllisteners)
-- [Interfaces](#interfaces)
-- [Type Aliases](#type-aliases)
+* [`setQueue(...)`](#setqueue)
+* [`syncQueue(...)`](#syncqueue)
+* [`getQueue()`](#getqueue)
+* [`addQueueItems(...)`](#addqueueitems)
+* [`removeQueueItem(...)`](#removequeueitem)
+* [`moveQueueItem(...)`](#movequeueitem)
+* [`clearQueue()`](#clearqueue)
+* [`play()`](#play)
+* [`pause()`](#pause)
+* [`stop()`](#stop)
+* [`seek(...)`](#seek)
+* [`skipToNext()`](#skiptonext)
+* [`skipToPrevious()`](#skiptoprevious)
+* [`skipToIndex(...)`](#skiptoindex)
+* [`setRate(...)`](#setrate)
+* [`setVolume(...)`](#setvolume)
+* [`getState()`](#getstate)
+* [`setItemProgress(...)`](#setitemprogress)
+* [`getItemProgress(...)`](#getitemprogress)
+* [`setPlaybackOptions(...)`](#setplaybackoptions)
+* [`getPlaybackOptions()`](#getplaybackoptions)
+* [`setRepeatMode(...)`](#setrepeatmode)
+* [`setShuffle(...)`](#setshuffle)
+* [`addListener('stateChange', ...)`](#addlistenerstatechange-)
+* [`addListener('trackChange', ...)`](#addlistenertrackchange-)
+* [`addListener('queueChange', ...)`](#addlistenerqueuechange-)
+* [`addListener('metadataChange', ...)`](#addlistenermetadatachange-)
+* [`addListener('audioBecomingNoisy', ...)`](#addlisteneraudiobecomingnoisy-)
+* [`removeAllListeners()`](#removealllisteners)
+* [Interfaces](#interfaces)
+* [Type Aliases](#type-aliases)
 
 </docgen-index>
 
@@ -154,7 +154,8 @@ setQueue(params: SetQueueParams) => Promise<void>
 | ------------ | --------------------------------------------------------- |
 | **`params`** | <code><a href="#setqueueparams">SetQueueParams</a></code> |
 
----
+--------------------
+
 
 ### syncQueue(...)
 
@@ -168,7 +169,8 @@ syncQueue(params: SyncQueueParams) => Promise<SyncQueueResult>
 
 **Returns:** <code>Promise&lt;<a href="#syncqueueresult">SyncQueueResult</a>&gt;</code>
 
----
+--------------------
+
 
 ### getQueue()
 
@@ -178,7 +180,8 @@ getQueue() => Promise<GetQueueResult>
 
 **Returns:** <code>Promise&lt;<a href="#getqueueresult">GetQueueResult</a>&gt;</code>
 
----
+--------------------
+
 
 ### addQueueItems(...)
 
@@ -190,7 +193,8 @@ addQueueItems(params: AddQueueItemsParams) => Promise<void>
 | ------------ | ------------------------------------------------------------------- |
 | **`params`** | <code><a href="#addqueueitemsparams">AddQueueItemsParams</a></code> |
 
----
+--------------------
+
 
 ### removeQueueItem(...)
 
@@ -202,7 +206,8 @@ removeQueueItem(params: RemoveQueueItemParams) => Promise<void>
 | ------------ | ----------------------------------------------------------------------- |
 | **`params`** | <code><a href="#removequeueitemparams">RemoveQueueItemParams</a></code> |
 
----
+--------------------
+
 
 ### moveQueueItem(...)
 
@@ -214,7 +219,8 @@ moveQueueItem(params: MoveQueueItemParams) => Promise<void>
 | ------------ | ------------------------------------------------------------------- |
 | **`params`** | <code><a href="#movequeueitemparams">MoveQueueItemParams</a></code> |
 
----
+--------------------
+
 
 ### clearQueue()
 
@@ -222,7 +228,8 @@ moveQueueItem(params: MoveQueueItemParams) => Promise<void>
 clearQueue() => Promise<void>
 ```
 
----
+--------------------
+
 
 ### play()
 
@@ -230,7 +237,8 @@ clearQueue() => Promise<void>
 play() => Promise<void>
 ```
 
----
+--------------------
+
 
 ### pause()
 
@@ -238,7 +246,8 @@ play() => Promise<void>
 pause() => Promise<void>
 ```
 
----
+--------------------
+
 
 ### stop()
 
@@ -246,7 +255,8 @@ pause() => Promise<void>
 stop() => Promise<void>
 ```
 
----
+--------------------
+
 
 ### seek(...)
 
@@ -258,7 +268,8 @@ seek(params: SeekParams) => Promise<void>
 | ------------ | ------------------------------------------------- |
 | **`params`** | <code><a href="#seekparams">SeekParams</a></code> |
 
----
+--------------------
+
 
 ### skipToNext()
 
@@ -266,7 +277,8 @@ seek(params: SeekParams) => Promise<void>
 skipToNext() => Promise<void>
 ```
 
----
+--------------------
+
 
 ### skipToPrevious()
 
@@ -274,7 +286,8 @@ skipToNext() => Promise<void>
 skipToPrevious() => Promise<void>
 ```
 
----
+--------------------
+
 
 ### skipToIndex(...)
 
@@ -286,7 +299,8 @@ skipToIndex(params: SkipToIndexParams) => Promise<void>
 | ------------ | --------------------------------------------------------------- |
 | **`params`** | <code><a href="#skiptoindexparams">SkipToIndexParams</a></code> |
 
----
+--------------------
+
 
 ### setRate(...)
 
@@ -298,7 +312,8 @@ setRate(params: SetRateParams) => Promise<void>
 | ------------ | ------------------------------------------------------- |
 | **`params`** | <code><a href="#setrateparams">SetRateParams</a></code> |
 
----
+--------------------
+
 
 ### setVolume(...)
 
@@ -310,7 +325,8 @@ setVolume(params: SetVolumeParams) => Promise<void>
 | ------------ | ----------------------------------------------------------- |
 | **`params`** | <code><a href="#setvolumeparams">SetVolumeParams</a></code> |
 
----
+--------------------
+
 
 ### getState()
 
@@ -320,7 +336,8 @@ getState() => Promise<PlayerState>
 
 **Returns:** <code>Promise&lt;<a href="#playerstate">PlayerState</a>&gt;</code>
 
----
+--------------------
+
 
 ### setItemProgress(...)
 
@@ -332,7 +349,8 @@ setItemProgress(params: SetItemProgressParams) => Promise<void>
 | ------------ | ----------------------------------------------------------------------- |
 | **`params`** | <code><a href="#setitemprogressparams">SetItemProgressParams</a></code> |
 
----
+--------------------
+
 
 ### getItemProgress(...)
 
@@ -346,7 +364,8 @@ getItemProgress(params: GetItemProgressParams) => Promise<ItemProgress>
 
 **Returns:** <code>Promise&lt;<a href="#itemprogress">ItemProgress</a>&gt;</code>
 
----
+--------------------
+
 
 ### setPlaybackOptions(...)
 
@@ -358,7 +377,8 @@ setPlaybackOptions(params: SetPlaybackOptionsParams) => Promise<void>
 | ------------ | ------------------------------------------------------------------------------------------------- |
 | **`params`** | <code><a href="#partial">Partial</a>&lt;<a href="#playbackoptions">PlaybackOptions</a>&gt;</code> |
 
----
+--------------------
+
 
 ### getPlaybackOptions()
 
@@ -368,7 +388,8 @@ getPlaybackOptions() => Promise<PlaybackOptions>
 
 **Returns:** <code>Promise&lt;<a href="#playbackoptions">PlaybackOptions</a>&gt;</code>
 
----
+--------------------
+
 
 ### setRepeatMode(...)
 
@@ -380,7 +401,8 @@ setRepeatMode(params: SetRepeatModeParams) => Promise<void>
 | ------------ | ------------------------------------------------------------------- |
 | **`params`** | <code><a href="#setrepeatmodeparams">SetRepeatModeParams</a></code> |
 
----
+--------------------
+
 
 ### setShuffle(...)
 
@@ -392,7 +414,8 @@ setShuffle(params: SetShuffleParams) => Promise<void>
 | ------------ | ------------------------------------------------------------- |
 | **`params`** | <code><a href="#setshuffleparams">SetShuffleParams</a></code> |
 
----
+--------------------
+
 
 ### addListener('stateChange', ...)
 
@@ -407,7 +430,8 @@ addListener(eventName: 'stateChange', listenerFunc: (state: PlayerState) => void
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
----
+--------------------
+
 
 ### addListener('trackChange', ...)
 
@@ -422,7 +446,8 @@ addListener(eventName: 'trackChange', listenerFunc: (event: TrackChangeEvent) =>
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
----
+--------------------
+
 
 ### addListener('queueChange', ...)
 
@@ -437,7 +462,8 @@ addListener(eventName: 'queueChange', listenerFunc: (event: QueueChangeEvent) =>
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
----
+--------------------
+
 
 ### addListener('metadataChange', ...)
 
@@ -452,7 +478,8 @@ addListener(eventName: 'metadataChange', listenerFunc: (event: MetadataChangeEve
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
----
+--------------------
+
 
 ### addListener('audioBecomingNoisy', ...)
 
@@ -471,7 +498,8 @@ On iOS this listener is a no-op and is never emitted.
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
 
----
+--------------------
+
 
 ### removeAllListeners()
 
@@ -479,9 +507,11 @@ On iOS this listener is a no-op and is never emitted.
 removeAllListeners() => Promise<void>
 ```
 
----
+--------------------
+
 
 ### Interfaces
+
 
 #### SetQueueParams
 
@@ -491,6 +521,7 @@ removeAllListeners() => Promise<void>
 | **`startIndex`**           | <code>number</code>      |
 | **`startPositionSeconds`** | <code>number</code>      |
 | **`autoplay`**             | <code>boolean</code>     |
+
 
 #### QueueItem
 
@@ -507,11 +538,13 @@ removeAllListeners() => Promise<void>
 | **`metadataUpdateInterval`** | <code>number</code>                                          |                                                                            |
 | **`extras`**                 | <code><a href="#record">Record</a>&lt;string, any&gt;</code> | Opaque app-defined data (not interpreted by native).                       |
 
+
 #### SyncQueueResult
 
 | Prop                | Type                |
 | ------------------- | ------------------- |
 | **`queueRevision`** | <code>number</code> |
+
 
 #### SyncQueueParams
 
@@ -522,6 +555,7 @@ removeAllListeners() => Promise<void>
 | **`expectedQueueRevision`** | <code>number</code>                                     |
 | **`force`**                 | <code>boolean</code>                                    |
 
+
 #### GetQueueResult
 
 | Prop                | Type                     |
@@ -531,6 +565,7 @@ removeAllListeners() => Promise<void>
 | **`currentIndex`**  | <code>number</code>      |
 | **`currentItemId`** | <code>string</code>      |
 
+
 #### AddQueueItemsParams
 
 | Prop          | Type                     |
@@ -538,11 +573,13 @@ removeAllListeners() => Promise<void>
 | **`items`**   | <code>QueueItem[]</code> |
 | **`atIndex`** | <code>number</code>      |
 
+
 #### RemoveQueueItemParams
 
 | Prop         | Type                |
 | ------------ | ------------------- |
 | **`itemId`** | <code>string</code> |
+
 
 #### MoveQueueItemParams
 
@@ -551,11 +588,13 @@ removeAllListeners() => Promise<void>
 | **`fromIndex`** | <code>number</code> |
 | **`toIndex`**   | <code>number</code> |
 
+
 #### SeekParams
 
 | Prop                  | Type                |
 | --------------------- | ------------------- |
 | **`positionSeconds`** | <code>number</code> |
+
 
 #### SkipToIndexParams
 
@@ -564,17 +603,20 @@ removeAllListeners() => Promise<void>
 | **`index`**           | <code>number</code> |
 | **`positionSeconds`** | <code>number</code> |
 
+
 #### SetRateParams
 
 | Prop       | Type                | Description                         |
 | ---------- | ------------------- | ----------------------------------- |
 | **`rate`** | <code>number</code> | Playback speed (e.g. `1.0` normal). |
 
+
 #### SetVolumeParams
 
 | Prop         | Type                | Description       |
 | ------------ | ------------------- | ----------------- |
 | **`volume`** | <code>number</code> | Volume in 0..100. |
+
 
 #### PlayerState
 
@@ -592,6 +634,7 @@ removeAllListeners() => Promise<void>
 | **`repeatMode`**    | <code><a href="#repeatmode">RepeatMode</a></code>         |                                                                  |
 | **`shuffle`**       | <code>boolean</code>                                      |                                                                  |
 
+
 #### SetItemProgressParams
 
 | Prop                  | Type                 |
@@ -600,6 +643,7 @@ removeAllListeners() => Promise<void>
 | **`positionSeconds`** | <code>number</code>  |
 | **`durationSeconds`** | <code>number</code>  |
 | **`completed`**       | <code>boolean</code> |
+
 
 #### ItemProgress
 
@@ -611,11 +655,13 @@ removeAllListeners() => Promise<void>
 | **`completed`**        | <code>boolean</code> |
 | **`updatedAtEpochMs`** | <code>number</code>  |
 
+
 #### GetItemProgressParams
 
 | Prop         | Type                |
 | ------------ | ------------------- |
 | **`itemId`** | <code>string</code> |
+
 
 #### PlaybackOptions
 
@@ -630,11 +676,13 @@ removeAllListeners() => Promise<void>
 | **`enableStop`**                   | <code>boolean</code> | Whether to expose stop controls in OS UIs when possible.                                                                                 | <code>true</code> |
 | **`androidNotificationSmallIcon`** | <code>string</code>  | Android-only: override the drawable name for the notification small icon. (No extension, no `R.drawable.` prefix.)                       |                   |
 
+
 #### SetRepeatModeParams
 
 | Prop             | Type                                              |
 | ---------------- | ------------------------------------------------- |
 | **`repeatMode`** | <code><a href="#repeatmode">RepeatMode</a></code> |
+
 
 #### SetShuffleParams
 
@@ -642,11 +690,13 @@ removeAllListeners() => Promise<void>
 | ------------- | -------------------- |
 | **`shuffle`** | <code>boolean</code> |
 
+
 #### PluginListenerHandle
 
 | Prop         | Type                                      |
 | ------------ | ----------------------------------------- |
 | **`remove`** | <code>() =&gt; Promise&lt;void&gt;</code> |
+
 
 #### TrackChangeEvent
 
@@ -656,6 +706,7 @@ removeAllListeners() => Promise<void>
 | **`currentIndex`**  | <code>number</code>                             |
 | **`item`**          | <code><a href="#queueitem">QueueItem</a></code> |
 
+
 #### MetadataChangeEvent
 
 | Prop                | Type                                                                                  |
@@ -664,39 +715,43 @@ removeAllListeners() => Promise<void>
 | **`itemId`**        | <code>string</code>                                                                   |
 | **`metadata`**      | <code><a href="#partial">Partial</a>&lt;<a href="#queueitem">QueueItem</a>&gt;</code> |
 
+
 ### Type Aliases
+
 
 #### Record
 
 Construct a type with a set of properties K of type T
 
-<code>{
-[P in K]: T;
-}</code>
+<code>{ [P in K]: T; }</code>
+
 
 #### SyncQueueMode
 
 <code>'replace' | 'patch'</code>
 
+
 #### PlaybackStatus
 
 <code>'playing' | 'paused' | 'stopped'</code>
+
 
 #### RepeatMode
 
 <code>'off' | 'one' | 'all'</code>
 
+
 #### SetPlaybackOptionsParams
 
 <code><a href="#partial">Partial</a>&lt;<a href="#playbackoptions">PlaybackOptions</a>&gt;</code>
+
 
 #### Partial
 
 Make all properties in T optional
 
-<code>{
-[P in keyof T]?: T[P];
-}</code>
+<code>{ [P in keyof T]?: T[P]; }</code>
+
 
 #### QueueChangeEvent
 
