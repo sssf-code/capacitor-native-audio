@@ -143,6 +143,7 @@ final class QueueModels {
         boolean enableSkipForwardBackward = true;
         boolean enableStop = true;
         @Nullable String androidNotificationSmallIcon = null;
+        boolean autoplayNext = true;
 
         static PlaybackOptions defaults() {
             return new PlaybackOptions();
@@ -159,6 +160,7 @@ final class QueueModels {
             if (obj.has("enableSkipForwardBackward")) out.enableSkipForwardBackward = obj.optBoolean("enableSkipForwardBackward", out.enableSkipForwardBackward);
             if (obj.has("enableStop")) out.enableStop = obj.optBoolean("enableStop", out.enableStop);
             if (obj.has("androidNotificationSmallIcon")) out.androidNotificationSmallIcon = obj.optString("androidNotificationSmallIcon", null);
+            if (obj.has("autoplayNext")) out.autoplayNext = obj.optBoolean("autoplayNext", out.autoplayNext);
             return out;
         }
 
@@ -172,6 +174,7 @@ final class QueueModels {
             obj.put("enableSkipForwardBackward", enableSkipForwardBackward);
             obj.put("enableStop", enableStop);
             if (androidNotificationSmallIcon != null) obj.put("androidNotificationSmallIcon", androidNotificationSmallIcon);
+            obj.put("autoplayNext", autoplayNext);
             return obj;
         }
     }

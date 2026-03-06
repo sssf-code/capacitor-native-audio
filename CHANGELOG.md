@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased](https://github.com/mediagrid/capacitor-native-audio/compare/v4.1.0...HEAD)
+## [Unreleased](https://github.com/mediagrid/capacitor-native-audio/compare/v4.1.1...HEAD)
+
+## [v4.1.1](https://github.com/mediagrid/capacitor-native-audio/compare/v4.1.0...v4.1.1) - 2026-03-06
+
+### What's Changed
+
+- feat: add unified `autoplay` and `autoplayNext` behavior across web, iOS, and Android queue players
 
 ## [v4.1.0](https://github.com/mediagrid/capacitor-native-audio/compare/v3.0.0...v4.1.0) - 2026-03-05
 

@@ -54,6 +54,7 @@ public class AudioPlayerService
         );
 
         ExoPlayer player = new ExoPlayer.Builder(this)
+            .setPauseAtEndOfMediaItems(false)
             .setAudioAttributes(
                 new AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)

@@ -7,6 +7,7 @@ const DEFAULT_PLAYBACK_OPTIONS = {
     enableSeekTo: true,
     enableSkipForwardBackward: true,
     enableStop: true,
+    autoplayNext: true,
 };
 export class AudioPlayerWeb extends WebPlugin {
     constructor() {
@@ -217,11 +218,19 @@ export class AudioPlayerWeb extends WebPlugin {
                 updatedAtEpochMs: now,
             });
         }
-        if (this.repeatMode === 'one') {
+        if (this.repeatMode === 'one' && this.playbackOptions.autoplayNext !== false) {
             void this.seek({ positionSeconds: 0 }).then(() => this.play());
             return;
         }
         const lastIndex = this.queue.length - 1;
+        // When autoplayNext is disabled, do not advance in the queue or repeat;
+        // pause/stop at the end of the current item and keep the session active.
+        if (this.playbackOptions.autoplayNext === false) {
+            this.status = 'stopped';
+            this.bumpStateRevision();
+            this.notifyListeners('stateChange', this.buildState());
+            return;
+        }
         if (this.currentIndex < lastIndex) {
             void this.skipToNext();
             return;

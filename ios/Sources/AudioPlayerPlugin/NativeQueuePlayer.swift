@@ -754,9 +754,33 @@ final class NativeQueuePlayer {
         )
 
         // Repeat semantics.
-        if options.enableNextPrev, state.repeatMode == .one {
+        if options.enableNextPrev, options.autoplayNext, state.repeatMode == .one {
             skipToIndex(idx, positionSeconds: 0)
             play()
+            return
+        }
+
+        // When autoplayNext is disabled, do not advance in the queue or repeat;
+        // pause at the end of the current item and keep the session active.
+        if options.autoplayNext == false {
+            player.pause()
+            isStopped = false
+            state.status = .paused
+            state.position = endedPosition
+            state.duration = endedDuration
+            bumpStateRevision()
+            persist()
+            stopMetadataPolling()
+            let notifyAfterSeek = { [weak self] in
+                guard let self else { return }
+                self.notifyStateChange()
+                self.refreshNowPlaying()
+            }
+            if endedPosition > 0 {
+                player.seek(to: CMTime(seconds: endedPosition, preferredTimescale: seekTimescale)) { _ in notifyAfterSeek() }
+            } else {
+                notifyAfterSeek()
+            }
             return
         }
 
