@@ -30,7 +30,6 @@ export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlug
     private getInactiveStatusAfterLoad;
     private isCurrentItemLoaded;
     private withSuppressedElementPlaybackEvents;
-    private resolveEffectiveQueue;
     private buildInitialShuffleQueue;
     private rebuildShuffleQueueAfterBaseChange;
     private updateEffectiveQueue;
