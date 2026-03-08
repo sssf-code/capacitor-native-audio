@@ -12,6 +12,8 @@ export class AudioPlayerWeb extends WebPlugin {
     constructor() {
         super(...arguments);
         this.audio = null;
+        this.baseQueue = [];
+        this.shuffleQueue = null;
         this.queue = [];
         this.currentIndex = 0;
         this.stateRevision = 0;
@@ -23,9 +25,11 @@ export class AudioPlayerWeb extends WebPlugin {
         this.shuffle = false;
         this.playbackOptions = Object.assign({}, DEFAULT_PLAYBACK_OPTIONS);
         this.progress = new Map();
-        // Guard that suppresses 'play'/'pause' element event re-emissions when the
-        // change was already initiated (and will be notified) by a public method.
-        this.internalOperation = false;
+        this.suppressElementPlaybackEvents = 0;
+        this.loadGeneration = 0;
+        this.loadedItemId = null;
+        this.metadataPollTimer = null;
+        this.metadataFingerprintByItemId = new Map();
     }
     ensureAudio() {
         if (this.audio) {
@@ -37,41 +41,57 @@ export class AudioPlayerWeb extends WebPlugin {
             if (!this.audio) {
                 return;
             }
-            this.notifyStateFromElement();
+            this.emitPassiveStateSnapshot();
         });
         audio.addEventListener('loadedmetadata', () => {
             if (!this.audio) {
                 return;
             }
-            this.notifyStateFromElement();
+            this.emitPassiveStateSnapshot();
+        });
+        audio.addEventListener('durationchange', () => {
+            if (!this.audio) {
+                return;
+            }
+            this.emitPassiveStateSnapshot();
         });
         audio.addEventListener('ended', () => {
-            this.handleEnded();
+            void this.handleEnded();
         });
         audio.addEventListener('play', () => {
-            if (!this.audio || this.internalOperation) {
+            if (!this.audio || this.suppressElementPlaybackEvents > 0) {
                 return;
             }
             this.status = 'playing';
-            this.bumpStateRevision();
-            this.notifyListeners('stateChange', this.buildState());
+            this.startMetadataPollingIfNeeded();
+            void this.emitStateChange();
         });
         audio.addEventListener('pause', () => {
-            if (!this.audio || this.internalOperation || this.status === 'stopped') {
+            if (!this.audio ||
+                this.suppressElementPlaybackEvents > 0 ||
+                this.status === 'stopped') {
                 return;
             }
             this.status = 'paused';
-            this.bumpStateRevision();
-            this.notifyListeners('stateChange', this.buildState());
+            this.stopMetadataPolling();
+            void this.emitStateChange();
         });
         this.audio = audio;
+        this.updateMediaSessionHandlers();
         return audio;
+    }
+    getMediaSession() {
+        if (typeof navigator === 'undefined') {
+            return undefined;
+        }
+        return navigator.mediaSession;
     }
     bumpStateRevision() {
         this.stateRevision += 1;
     }
     bumpQueueRevision() {
         this.queueRevision += 1;
+        this.stateRevision += 1;
     }
     getCurrentItem() {
         if (this.currentIndex < 0 || this.currentIndex >= this.queue.length) {
@@ -79,21 +99,129 @@ export class AudioPlayerWeb extends WebPlugin {
         }
         return this.queue[this.currentIndex];
     }
+    getCurrentPosition() {
+        var _a, _b;
+        return (_b = (_a = this.audio) === null || _a === void 0 ? void 0 : _a.currentTime) !== null && _b !== void 0 ? _b : 0;
+    }
+    getCurrentDuration() {
+        var _a;
+        const duration = (_a = this.audio) === null || _a === void 0 ? void 0 : _a.duration;
+        return Number.isFinite(duration !== null && duration !== void 0 ? duration : NaN) ? duration : undefined;
+    }
+    getInactiveStatusAfterLoad(previousStatus) {
+        return previousStatus === 'paused' ? 'paused' : 'stopped';
+    }
+    isCurrentItemLoaded() {
+        const currentItem = this.getCurrentItem();
+        return !!currentItem && this.loadedItemId === currentItem.id && !!this.audio;
+    }
+    async withSuppressedElementPlaybackEvents(fn) {
+        this.suppressElementPlaybackEvents += 1;
+        try {
+            return await fn();
+        }
+        finally {
+            this.suppressElementPlaybackEvents -= 1;
+        }
+    }
+    resolveEffectiveQueue() {
+        var _a, _b;
+        if (!this.shuffle) {
+            return [...this.baseQueue];
+        }
+        if (this.shuffleQueue) {
+            const baseIds = this.baseQueue.map(item => item.id);
+            const shuffleIds = this.shuffleQueue.map(item => item.id);
+            if (baseIds.length === shuffleIds.length && baseIds.every(id => shuffleIds.includes(id))) {
+                return [...this.shuffleQueue];
+            }
+        }
+        this.shuffleQueue = this.buildInitialShuffleQueue(this.baseQueue, (_a = this.getCurrentItem()) === null || _a === void 0 ? void 0 : _a.id);
+        return [...((_b = this.shuffleQueue) !== null && _b !== void 0 ? _b : this.baseQueue)];
+    }
+    buildInitialShuffleQueue(base, currentItemId) {
+        var _a;
+        if (base.length < 2) {
+            return [...base];
+        }
+        const currentId = currentItemId !== null && currentItemId !== void 0 ? currentItemId : (_a = base[0]) === null || _a === void 0 ? void 0 : _a.id;
+        const currentIndex = currentId
+            ? Math.max(0, base.findIndex(item => item.id === currentId))
+            : 0;
+        const resolvedIndex = currentIndex >= 0 && currentIndex < base.length ? currentIndex : 0;
+        const prefix = base.slice(0, resolvedIndex + 1);
+        const tail = base.slice(resolvedIndex + 1);
+        for (let idx = tail.length - 1; idx > 0; idx -= 1) {
+            const swapIdx = Math.floor(Math.random() * (idx + 1));
+            [tail[idx], tail[swapIdx]] = [tail[swapIdx], tail[idx]];
+        }
+        return [...prefix, ...tail];
+    }
+    rebuildShuffleQueueAfterBaseChange(currentItemId) {
+        var _a, _b;
+        if (!this.shuffle || this.baseQueue.length < 2) {
+            return [...this.baseQueue];
+        }
+        const desiredId = currentItemId !== null && currentItemId !== void 0 ? currentItemId : (_a = this.getCurrentItem()) === null || _a === void 0 ? void 0 : _a.id;
+        const baseById = new Map(this.baseQueue.map(item => [item.id, item]));
+        const existing = (_b = this.shuffleQueue) !== null && _b !== void 0 ? _b : this.queue;
+        const prefixIds = [];
+        if (desiredId) {
+            const currentIdx = existing.findIndex(item => item.id === desiredId);
+            if (currentIdx !== -1) {
+                prefixIds.push(...existing
+                    .slice(0, currentIdx + 1)
+                    .map(item => item.id)
+                    .filter(id => baseById.has(id)));
+            }
+        }
+        const prefixItems = prefixIds
+            .map(id => baseById.get(id))
+            .filter((item) => !!item);
+        const remaining = this.baseQueue.filter(item => !prefixIds.includes(item.id));
+        for (let idx = remaining.length - 1; idx > 0; idx -= 1) {
+            const swapIdx = Math.floor(Math.random() * (idx + 1));
+            [remaining[idx], remaining[swapIdx]] = [remaining[swapIdx], remaining[idx]];
+        }
+        return [...prefixItems, ...remaining];
+    }
+    updateEffectiveQueue(desiredCurrentItemId, preserveExistingShufflePrefix = false) {
+        var _a;
+        if (!this.shuffle) {
+            this.shuffleQueue = null;
+            this.queue = [...this.baseQueue];
+            return;
+        }
+        this.shuffleQueue = preserveExistingShufflePrefix
+            ? this.rebuildShuffleQueueAfterBaseChange(desiredCurrentItemId)
+            : this.buildInitialShuffleQueue(this.baseQueue, desiredCurrentItemId);
+        this.queue = [...((_a = this.shuffleQueue) !== null && _a !== void 0 ? _a : this.baseQueue)];
+    }
+    resolveQueueIndex(desiredItemId, desiredIndex) {
+        if (desiredItemId) {
+            const idx = this.queue.findIndex(item => item.id === desiredItemId);
+            if (idx !== -1) {
+                return idx;
+            }
+        }
+        if (this.queue.length === 0) {
+            return 0;
+        }
+        const fallback = desiredIndex !== null && desiredIndex !== void 0 ? desiredIndex : 0;
+        return Math.max(0, Math.min(fallback, this.queue.length - 1));
+    }
     updateMediaSessionMetadata(item) {
         var _a, _b, _c;
-        if (typeof navigator === 'undefined') {
-            return;
-        }
-        const anyNavigator = navigator;
-        if (!anyNavigator.mediaSession) {
-            return;
-        }
-        if (!item) {
-            anyNavigator.mediaSession.metadata = null;
+        const session = this.getMediaSession();
+        if (!session) {
             return;
         }
         try {
-            anyNavigator.mediaSession.metadata = new MediaMetadata({
+            if (!item) {
+                session.metadata = null;
+                return;
+            }
+            session.metadata = new MediaMetadata({
                 title: (_a = item.title) !== null && _a !== void 0 ? _a : '',
                 artist: (_b = item.artist) !== null && _b !== void 0 ? _b : '',
                 album: (_c = item.album) !== null && _c !== void 0 ? _c : '',
@@ -107,32 +235,68 @@ export class AudioPlayerWeb extends WebPlugin {
                     ]
                     : [],
             });
-            this.updateMediaSessionHandlers(anyNavigator.mediaSession);
         }
         catch (_d) {
             // Media Session is best-effort only
         }
     }
-    updateMediaSessionHandlers(mediaSession) {
-        var _a;
-        if (typeof navigator === 'undefined') {
-            return;
-        }
-        const anyNavigator = navigator;
-        const session = mediaSession !== null && mediaSession !== void 0 ? mediaSession : anyNavigator.mediaSession;
+    updateMediaSessionPlaybackState() {
+        const session = this.getMediaSession();
         if (!session) {
             return;
         }
-        const opts = (_a = this.playbackOptions) !== null && _a !== void 0 ? _a : {};
         try {
-            // Basic play/pause handlers are always enabled.
+            session.playbackState =
+                this.status === 'playing'
+                    ? 'playing'
+                    : this.status === 'paused'
+                        ? 'paused'
+                        : 'none';
+        }
+        catch (_a) {
+            // Media Session is best-effort only
+        }
+    }
+    updateMediaSessionPositionState() {
+        const session = this.getMediaSession();
+        if (!session || typeof session.setPositionState !== 'function') {
+            return;
+        }
+        try {
+            const item = this.getCurrentItem();
+            const duration = this.getCurrentDuration();
+            if (!item || !this.audio || !duration || duration <= 0) {
+                session.setPositionState();
+                return;
+            }
+            session.setPositionState({
+                duration,
+                playbackRate: this.rate,
+                position: Math.max(0, Math.min(this.audio.currentTime, duration)),
+            });
+        }
+        catch (_a) {
+            // Media Session is best-effort only
+        }
+    }
+    refreshMediaSessionState() {
+        this.updateMediaSessionMetadata(this.getCurrentItem());
+        this.updateMediaSessionPlaybackState();
+        this.updateMediaSessionPositionState();
+    }
+    updateMediaSessionHandlers(mediaSession) {
+        const session = mediaSession !== null && mediaSession !== void 0 ? mediaSession : this.getMediaSession();
+        if (!session) {
+            return;
+        }
+        const opts = this.playbackOptions;
+        try {
             session.setActionHandler('play', async () => {
                 await this.play();
             });
             session.setActionHandler('pause', async () => {
                 await this.pause();
             });
-            // Stop
             if (opts.enableStop === false) {
                 session.setActionHandler('stop', null);
             }
@@ -141,7 +305,6 @@ export class AudioPlayerWeb extends WebPlugin {
                     await this.stop();
                 });
             }
-            // SeekTo
             if (opts.enableSeekTo === false) {
                 session.setActionHandler('seekto', null);
             }
@@ -152,7 +315,6 @@ export class AudioPlayerWeb extends WebPlugin {
                     }
                 });
             }
-            // Skip backward/forward
             if (opts.enableSkipForwardBackward === false) {
                 session.setActionHandler('seekbackward', null);
                 session.setActionHandler('seekforward', null);
@@ -162,8 +324,7 @@ export class AudioPlayerWeb extends WebPlugin {
                     const offset = typeof details.seekOffset === 'number'
                         ? details.seekOffset
                         : this.playbackOptions.skipBackwardSeconds;
-                    const state = await this.getState();
-                    const target = Math.max(0, state.position - offset);
+                    const target = Math.max(0, this.getCurrentPosition() - offset);
                     await this.seek({ positionSeconds: target });
                 });
                 session.setActionHandler('seekforward', async (details) => {
@@ -171,13 +332,11 @@ export class AudioPlayerWeb extends WebPlugin {
                     const offset = typeof details.seekOffset === 'number'
                         ? details.seekOffset
                         : this.playbackOptions.skipForwardSeconds;
-                    const state = await this.getState();
-                    const duration = (_a = state.duration) !== null && _a !== void 0 ? _a : Number.MAX_SAFE_INTEGER;
-                    const target = Math.min(duration, state.position + offset);
+                    const duration = (_a = this.getCurrentDuration()) !== null && _a !== void 0 ? _a : Number.MAX_SAFE_INTEGER;
+                    const target = Math.min(duration, this.getCurrentPosition() + offset);
                     await this.seek({ positionSeconds: target });
                 });
             }
-            // Previous/next track
             if (opts.enableNextPrev === false) {
                 session.setActionHandler('previoustrack', null);
                 session.setActionHandler('nexttrack', null);
@@ -191,28 +350,96 @@ export class AudioPlayerWeb extends WebPlugin {
                 });
             }
         }
-        catch (_b) {
+        catch (_a) {
             // Media Session is best-effort only
         }
     }
-    async loadCurrent(autoplay, startPositionSeconds) {
+    async emitStateChange(bumpRevision = true) {
+        if (bumpRevision) {
+            this.bumpStateRevision();
+        }
+        this.updateMediaSessionPlaybackState();
+        this.updateMediaSessionPositionState();
+        await this.notifyListeners('stateChange', this.buildState());
+    }
+    emitPassiveStateSnapshot() {
+        if (!this.audio) {
+            return;
+        }
+        this.updateMediaSessionPositionState();
+        void this.notifyListeners('stateChange', this.buildState());
+    }
+    async emitTrackChange() {
         const item = this.getCurrentItem();
         if (!item) {
             return;
         }
+        await this.notifyListeners('trackChange', {
+            queueRevision: this.queueRevision,
+            currentIndex: this.currentIndex,
+            item,
+        });
+    }
+    async emitQueueChange() {
+        await this.notifyListeners('queueChange', await this.getQueue());
+    }
+    async resetAudioForEmptyQueue() {
+        this.stopMetadataPolling();
+        this.loadGeneration += 1;
+        this.loadedItemId = null;
+        if (!this.audio) {
+            this.refreshMediaSessionState();
+            return;
+        }
+        await this.withSuppressedElementPlaybackEvents(async () => {
+            var _a;
+            (_a = this.audio) === null || _a === void 0 ? void 0 : _a.pause();
+            if (this.audio) {
+                this.audio.currentTime = 0;
+                this.audio.removeAttribute('src');
+                this.audio.load();
+            }
+        });
+        this.refreshMediaSessionState();
+    }
+    async resetQueueState() {
+        this.baseQueue = [];
+        this.shuffleQueue = null;
+        this.queue = [];
+        this.currentIndex = 0;
+        this.status = 'stopped';
+        await this.resetAudioForEmptyQueue();
+        this.bumpQueueRevision();
+        await this.emitQueueChange();
+        await this.emitStateChange(false);
+    }
+    syncAudioSettings() {
+        if (!this.audio) {
+            return;
+        }
+        this.audio.playbackRate = this.rate;
+        this.audio.volume = this.volume / 100;
+        this.updateMediaSessionPositionState();
+    }
+    async loadCurrent(options) {
+        const item = this.getCurrentItem();
+        if (!item) {
+            return false;
+        }
         const audio = this.ensureAudio();
-        this.internalOperation = true;
-        try {
+        const loadGeneration = ++this.loadGeneration;
+        this.stopMetadataPolling();
+        this.loadedItemId = null;
+        await this.withSuppressedElementPlaybackEvents(async () => {
             audio.pause();
             audio.currentTime = 0;
             audio.src = item.src;
-        }
-        finally {
-            this.internalOperation = false;
-        }
-        audio.playbackRate = this.rate;
-        audio.volume = this.volume / 100;
+        });
+        this.syncAudioSettings();
         this.updateMediaSessionMetadata(item);
+        this.updateMediaSessionHandlers();
+        this.updateMediaSessionPlaybackState();
+        this.updateMediaSessionPositionState();
         await new Promise((resolve, reject) => {
             const onReady = () => {
                 cleanup();
@@ -220,6 +447,10 @@ export class AudioPlayerWeb extends WebPlugin {
             };
             const onError = () => {
                 cleanup();
+                if (loadGeneration !== this.loadGeneration) {
+                    resolve();
+                    return;
+                }
                 reject(new Error('Failed to load audio source'));
             };
             const cleanup = () => {
@@ -238,40 +469,146 @@ export class AudioPlayerWeb extends WebPlugin {
                 reject(err instanceof Error ? err : new Error(String(err)));
             }
         });
-        if (typeof startPositionSeconds === 'number' && startPositionSeconds > 0) {
-            audio.currentTime = startPositionSeconds;
+        if (loadGeneration !== this.loadGeneration) {
+            return false;
         }
-        this.notifyStateFromElement();
-        if (autoplay) {
-            this.internalOperation = true;
-            try {
+        if (typeof options.positionSeconds === 'number' && options.positionSeconds > 0) {
+            const duration = this.getCurrentDuration();
+            const clamped = typeof duration === 'number'
+                ? Math.max(0, Math.min(options.positionSeconds, duration))
+                : Math.max(0, options.positionSeconds);
+            audio.currentTime = clamped;
+        }
+        this.loadedItemId = item.id;
+        if (options.autoplay) {
+            await this.withSuppressedElementPlaybackEvents(async () => {
                 await audio.play();
-            }
-            finally {
-                this.internalOperation = false;
+            });
+            if (loadGeneration !== this.loadGeneration) {
+                return false;
             }
             this.status = 'playing';
-            this.bumpStateRevision();
-            this.notifyListeners('stateChange', this.buildState());
+            this.startMetadataPollingIfNeeded();
         }
         else {
-            this.status = 'stopped';
-            this.bumpStateRevision();
-            this.notifyListeners('stateChange', this.buildState());
+            this.status = options.inactiveStatus;
+            this.stopMetadataPolling();
         }
-        this.notifyListeners('trackChange', {
-            queueRevision: this.queueRevision,
-            currentIndex: this.currentIndex,
-            item,
-        });
+        await this.emitStateChange();
+        if (options.emitTrackChange !== false) {
+            await this.emitTrackChange();
+        }
+        return true;
     }
-    handleEnded() {
-        var _a, _b, _c;
+    async seekWithinLoadedCurrent(positionSeconds) {
+        if (!this.audio || !this.isCurrentItemLoaded()) {
+            return false;
+        }
+        const duration = this.getCurrentDuration();
+        const target = typeof duration === 'number'
+            ? Math.max(0, Math.min(positionSeconds, duration))
+            : Math.max(0, positionSeconds);
+        this.audio.currentTime = target;
+        this.updateMediaSessionPositionState();
+        return true;
+    }
+    startMetadataPollingIfNeeded() {
+        var _a;
+        this.stopMetadataPolling();
+        if (this.status !== 'playing') {
+            return;
+        }
+        const item = this.getCurrentItem();
+        if (!(item === null || item === void 0 ? void 0 : item.metadataUpdateUrl)) {
+            return;
+        }
+        const intervalSeconds = Math.max(5, (_a = item.metadataUpdateInterval) !== null && _a !== void 0 ? _a : 15);
+        this.metadataPollTimer = setInterval(() => {
+            void this.fetchAndApplyMetadata(item.id, item.metadataUpdateUrl);
+        }, intervalSeconds * 1000);
+    }
+    stopMetadataPolling() {
+        if (this.metadataPollTimer) {
+            clearInterval(this.metadataPollTimer);
+            this.metadataPollTimer = null;
+        }
+    }
+    replaceItemEverywhere(itemId, updated) {
+        this.baseQueue = this.baseQueue.map(item => (item.id === itemId ? updated : item));
+        this.queue = this.queue.map(item => (item.id === itemId ? updated : item));
+        if (this.shuffleQueue) {
+            this.shuffleQueue = this.shuffleQueue.map(item => (item.id === itemId ? updated : item));
+        }
+    }
+    async fetchAndApplyMetadata(itemId, url) {
+        var _a, _b, _c, _d;
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                return;
+            }
+            const payload = (await response.json());
+            const title = typeof payload.title === 'string' ? payload.title : undefined;
+            const artist = typeof payload.artist === 'string' ? payload.artist : undefined;
+            const album = typeof payload.album === 'string' ? payload.album : undefined;
+            const artwork = typeof payload.artwork === 'string' ? payload.artwork : undefined;
+            if (!title && !artist && !album && !artwork) {
+                return;
+            }
+            const currentIndex = this.queue.findIndex(item => item.id === itemId);
+            if (currentIndex === -1) {
+                return;
+            }
+            const current = this.queue[currentIndex];
+            const changed = {};
+            const updated = Object.assign({}, current);
+            if (title && title !== current.title) {
+                updated.title = title;
+                changed.title = title;
+            }
+            if (artist && artist !== current.artist) {
+                updated.artist = artist;
+                changed.artist = artist;
+            }
+            if (album && album !== current.album) {
+                updated.album = album;
+                changed.album = album;
+            }
+            if (artwork && artwork !== current.artwork) {
+                updated.artwork = artwork;
+                changed.artwork = artwork;
+            }
+            if (Object.keys(changed).length === 0) {
+                return;
+            }
+            const fingerprint = `${updated.title}|${(_a = updated.artist) !== null && _a !== void 0 ? _a : ''}|${(_b = updated.album) !== null && _b !== void 0 ? _b : ''}|${(_c = updated.artwork) !== null && _c !== void 0 ? _c : ''}`;
+            if (this.metadataFingerprintByItemId.get(itemId) === fingerprint) {
+                return;
+            }
+            this.metadataFingerprintByItemId.set(itemId, fingerprint);
+            this.replaceItemEverywhere(itemId, updated);
+            if (((_d = this.getCurrentItem()) === null || _d === void 0 ? void 0 : _d.id) === itemId) {
+                this.updateMediaSessionMetadata(updated);
+            }
+            this.bumpStateRevision();
+            await this.notifyListeners('metadataChange', {
+                stateRevision: this.stateRevision,
+                itemId,
+                metadata: changed,
+            });
+            await this.emitQueueChange();
+        }
+        catch (_e) {
+            // Metadata polling is best-effort only
+        }
+    }
+    async handleEnded() {
+        var _a, _b;
         const item = this.getCurrentItem();
         const now = Date.now();
         if (item) {
             const existing = this.progress.get(item.id);
-            const durationSeconds = (_c = (_b = (_a = this.audio) === null || _a === void 0 ? void 0 : _a.duration) !== null && _b !== void 0 ? _b : existing === null || existing === void 0 ? void 0 : existing.durationSeconds) !== null && _c !== void 0 ? _c : 0;
+            const durationSeconds = (_b = (_a = this.getCurrentDuration()) !== null && _a !== void 0 ? _a : existing === null || existing === void 0 ? void 0 : existing.durationSeconds) !== null && _b !== void 0 ? _b : 0;
             this.progress.set(item.id, {
                 itemId: item.id,
                 positionSeconds: durationSeconds,
@@ -281,43 +618,38 @@ export class AudioPlayerWeb extends WebPlugin {
             });
         }
         if (this.repeatMode === 'one') {
-            void this.seek({ positionSeconds: 0 }).then(() => this.play());
+            await this.seek({ positionSeconds: 0 });
+            await this.play();
             return;
         }
         const lastIndex = this.queue.length - 1;
         if (this.currentIndex < lastIndex) {
-            void this.skipToNext();
+            await this.skipToNext();
             return;
         }
         if (this.repeatMode === 'all' && this.queue.length > 0) {
             this.currentIndex = 0;
-            void this.loadCurrent(true, 0);
+            await this.loadCurrent({
+                autoplay: true,
+                positionSeconds: 0,
+                inactiveStatus: 'stopped',
+            });
             return;
         }
+        this.stopMetadataPolling();
         this.status = 'stopped';
-        this.bumpStateRevision();
-        this.notifyListeners('stateChange', this.buildState());
-    }
-    notifyStateFromElement() {
-        if (!this.audio) {
-            return;
-        }
-        this.bumpStateRevision();
-        this.notifyListeners('stateChange', this.buildState());
+        await this.emitStateChange();
     }
     buildState() {
-        var _a, _b;
-        const audio = this.audio;
-        const position = (_a = audio === null || audio === void 0 ? void 0 : audio.currentTime) !== null && _a !== void 0 ? _a : 0;
-        const duration = audio === null || audio === void 0 ? void 0 : audio.duration;
+        var _a;
         return {
             stateRevision: this.stateRevision,
             queueRevision: this.queueRevision,
             status: this.status,
             currentIndex: this.currentIndex,
-            currentItemId: (_b = this.getCurrentItem()) === null || _b === void 0 ? void 0 : _b.id,
-            position,
-            duration: Number.isFinite(duration !== null && duration !== void 0 ? duration : NaN) ? duration : undefined,
+            currentItemId: (_a = this.getCurrentItem()) === null || _a === void 0 ? void 0 : _a.id,
+            position: this.getCurrentPosition(),
+            duration: this.getCurrentDuration(),
             rate: this.rate,
             volume: this.volume,
             repeatMode: this.repeatMode,
@@ -326,76 +658,96 @@ export class AudioPlayerWeb extends WebPlugin {
     }
     // Queue
     async setQueue(params) {
-        const { items, startIndex = 0, startPositionSeconds = 0, autoplay } = params;
-        this.queue = [...items];
+        var _a;
+        const { items, startIndex = 0, startPositionSeconds = 0, autoplay = false } = params;
+        const desiredItemId = (_a = items[Math.max(0, Math.min(startIndex, items.length - 1))]) === null || _a === void 0 ? void 0 : _a.id;
+        this.baseQueue = [...items];
+        this.updateEffectiveQueue(desiredItemId);
         if (this.queue.length === 0) {
-            this.currentIndex = 0;
-            this.bumpQueueRevision();
-            if (this.audio) {
-                this.internalOperation = true;
-                try {
-                    this.audio.pause();
-                    this.audio.removeAttribute('src');
-                    this.audio.load();
-                }
-                finally {
-                    this.internalOperation = false;
-                }
-            }
-            await this.notifyListeners('queueChange', await this.getQueue());
+            await this.resetQueueState();
             return;
         }
-        this.currentIndex = Math.max(0, Math.min(startIndex, this.queue.length - 1));
+        this.currentIndex = this.resolveQueueIndex(desiredItemId, startIndex);
         this.bumpQueueRevision();
-        await this.loadCurrent(autoplay !== null && autoplay !== void 0 ? autoplay : false, startPositionSeconds);
-        await this.notifyListeners('queueChange', await this.getQueue());
+        const loaded = await this.loadCurrent({
+            autoplay,
+            positionSeconds: startPositionSeconds,
+            inactiveStatus: 'stopped',
+        });
+        if (loaded) {
+            await this.emitQueueChange();
+        }
     }
     async syncQueue(params) {
-        var _a, _b;
+        var _a, _b, _c, _d;
         const mode = (_a = params.mode) !== null && _a !== void 0 ? _a : 'replace';
+        const hasExplicitStart = typeof params.startIndex === 'number' ||
+            typeof params.startPositionSeconds === 'number';
         if (typeof params.expectedQueueRevision === 'number' &&
-            params.expectedQueueRevision !== this.queueRevision) {
+            params.expectedQueueRevision !== this.queueRevision &&
+            !params.force) {
             throw new Error(`Queue revision mismatch: expected ${params.expectedQueueRevision}, got ${this.queueRevision}`);
         }
-        if (mode === 'replace') {
-            await this.setQueue(params);
+        if (mode === 'replace' || hasExplicitStart) {
+            await this.setQueue({
+                items: params.items,
+                startIndex: params.currentItemId
+                    ? params.items.findIndex(item => item.id === params.currentItemId)
+                    : params.startIndex,
+                startPositionSeconds: params.startPositionSeconds,
+                autoplay: params.autoplay,
+            });
             return { queueRevision: this.queueRevision };
         }
-        if (mode === 'patch') {
-            const { items, startIndex = 0, startPositionSeconds = 0, autoplay, currentItemId, } = params;
-            const previousItemId = currentItemId !== null && currentItemId !== void 0 ? currentItemId : (_b = this.getCurrentItem()) === null || _b === void 0 ? void 0 : _b.id;
-            this.queue = [...items];
-            if (this.queue.length === 0) {
-                this.currentIndex = 0;
-                this.bumpQueueRevision();
-                if (this.audio) {
-                    this.internalOperation = true;
-                    try {
-                        this.audio.pause();
-                        this.audio.removeAttribute('src');
-                        this.audio.load();
-                    }
-                    finally {
-                        this.internalOperation = false;
-                    }
-                }
-                await this.notifyListeners('queueChange', await this.getQueue());
+        if (mode !== 'patch') {
+            throw new Error(`Unsupported syncQueue mode: ${String(mode)}`);
+        }
+        const previousItemId = (_b = params.currentItemId) !== null && _b !== void 0 ? _b : (_c = this.getCurrentItem()) === null || _c === void 0 ? void 0 : _c.id;
+        const previousStatus = this.status;
+        const previousPosition = this.getCurrentPosition();
+        const shouldAutoplay = (_d = params.autoplay) !== null && _d !== void 0 ? _d : previousStatus === 'playing';
+        const inactiveStatus = this.getInactiveStatusAfterLoad(previousStatus);
+        this.baseQueue = [...params.items];
+        this.updateEffectiveQueue(previousItemId);
+        if (this.queue.length === 0) {
+            await this.resetQueueState();
+            return { queueRevision: this.queueRevision };
+        }
+        const preservedIndex = previousItemId
+            ? this.queue.findIndex(item => item.id === previousItemId)
+            : -1;
+        this.currentIndex =
+            preservedIndex !== -1
+                ? preservedIndex
+                : this.resolveQueueIndex(undefined, params.startIndex);
+        this.bumpQueueRevision();
+        if (preservedIndex !== -1 && this.loadedItemId === previousItemId && this.audio) {
+            if (typeof params.startPositionSeconds === 'number') {
+                await this.seekWithinLoadedCurrent(params.startPositionSeconds);
+            }
+            if (params.autoplay === true && this.status !== 'playing') {
+                await this.play();
+                await this.emitQueueChange();
                 return { queueRevision: this.queueRevision };
             }
-            let targetIndex = startIndex;
-            if (previousItemId) {
-                const preservedIndex = this.queue.findIndex(item => item.id === previousItemId);
-                if (preservedIndex !== -1) {
-                    targetIndex = preservedIndex;
-                }
+            if (params.autoplay === false && this.status === 'playing') {
+                await this.pause();
+                await this.emitQueueChange();
+                return { queueRevision: this.queueRevision };
             }
-            this.currentIndex = Math.max(0, Math.min(targetIndex, this.queue.length - 1));
-            this.bumpQueueRevision();
-            await this.loadCurrent(autoplay !== null && autoplay !== void 0 ? autoplay : false, startPositionSeconds);
-            await this.notifyListeners('queueChange', await this.getQueue());
+            await this.emitQueueChange();
+            await this.emitStateChange(false);
             return { queueRevision: this.queueRevision };
         }
-        throw new Error(`Unsupported syncQueue mode: ${String(mode)}`);
+        const loaded = await this.loadCurrent({
+            autoplay: shouldAutoplay,
+            positionSeconds: preservedIndex !== -1 ? previousPosition : 0,
+            inactiveStatus,
+        });
+        if (loaded) {
+            await this.emitQueueChange();
+        }
+        return { queueRevision: this.queueRevision };
     }
     async getQueue() {
         var _a;
@@ -407,149 +759,173 @@ export class AudioPlayerWeb extends WebPlugin {
         };
     }
     async addQueueItems(params) {
-        const { items, atIndex } = params;
-        if (typeof atIndex === 'number' && atIndex >= 0 && atIndex <= this.queue.length) {
-            this.queue.splice(atIndex, 0, ...items);
-            if (this.currentIndex >= atIndex) {
-                this.currentIndex += items.length;
-            }
+        var _a;
+        const previousItemId = (_a = this.getCurrentItem()) === null || _a === void 0 ? void 0 : _a.id;
+        const hadQueue = this.queue.length > 0;
+        const insertion = typeof params.atIndex === 'number'
+            ? Math.max(0, Math.min(params.atIndex, this.baseQueue.length))
+            : this.baseQueue.length;
+        this.baseQueue.splice(insertion, 0, ...params.items);
+        this.updateEffectiveQueue(previousItemId, true);
+        if (this.queue.length === 0) {
+            await this.resetQueueState();
+            return;
         }
-        else {
-            this.queue.push(...items);
-        }
+        this.currentIndex =
+            previousItemId !== undefined
+                ? this.resolveQueueIndex(previousItemId)
+                : this.resolveQueueIndex(undefined, insertion);
         this.bumpQueueRevision();
-        await this.notifyListeners('queueChange', await this.getQueue());
+        if (!hadQueue) {
+            const loaded = await this.loadCurrent({
+                autoplay: false,
+                positionSeconds: 0,
+                inactiveStatus: 'stopped',
+            });
+            if (loaded) {
+                await this.emitQueueChange();
+            }
+            return;
+        }
+        await this.emitQueueChange();
+        await this.emitStateChange(false);
     }
     async removeQueueItem(params) {
-        const idx = this.queue.findIndex(it => it.id === params.itemId);
-        if (idx === -1) {
+        var _a;
+        const previousItemId = (_a = this.getCurrentItem()) === null || _a === void 0 ? void 0 : _a.id;
+        const previousPosition = this.getCurrentPosition();
+        const previousStatus = this.status;
+        const previousIndex = this.currentIndex;
+        this.baseQueue = this.baseQueue.filter(item => item.id !== params.itemId);
+        this.updateEffectiveQueue(previousItemId, true);
+        if (this.queue.length === 0) {
+            await this.resetQueueState();
             return;
         }
-        this.queue.splice(idx, 1);
-        if (this.currentIndex > idx) {
-            this.currentIndex -= 1;
-        }
-        else if (this.currentIndex === idx) {
-            if (this.queue.length === 0) {
-                this.currentIndex = 0;
-                await this.stop();
-            }
-            else {
-                this.currentIndex = Math.min(this.currentIndex, this.queue.length - 1);
-                await this.loadCurrent(false, 0);
-            }
-        }
+        const preservedIndex = previousItemId
+            ? this.queue.findIndex(item => item.id === previousItemId)
+            : -1;
+        this.currentIndex =
+            preservedIndex !== -1
+                ? preservedIndex
+                : Math.max(0, Math.min(previousIndex, this.queue.length - 1));
         this.bumpQueueRevision();
-        await this.notifyListeners('queueChange', await this.getQueue());
+        if (preservedIndex !== -1 && this.loadedItemId === previousItemId) {
+            await this.emitQueueChange();
+            await this.emitStateChange(false);
+            return;
+        }
+        const loaded = await this.loadCurrent({
+            autoplay: previousStatus === 'playing',
+            positionSeconds: previousPosition,
+            inactiveStatus: this.getInactiveStatusAfterLoad(previousStatus),
+        });
+        if (loaded) {
+            await this.emitQueueChange();
+        }
     }
     async moveQueueItem(params) {
+        var _a;
         const { fromIndex, toIndex } = params;
         if (fromIndex < 0 ||
-            fromIndex >= this.queue.length ||
+            fromIndex >= this.baseQueue.length ||
             toIndex < 0 ||
-            toIndex >= this.queue.length) {
+            toIndex >= this.baseQueue.length) {
             return;
         }
-        const [item] = this.queue.splice(fromIndex, 1);
-        this.queue.splice(toIndex, 0, item);
-        if (this.currentIndex === fromIndex) {
-            this.currentIndex = toIndex;
+        const previousItemId = (_a = this.getCurrentItem()) === null || _a === void 0 ? void 0 : _a.id;
+        const [item] = this.baseQueue.splice(fromIndex, 1);
+        this.baseQueue.splice(toIndex, 0, item);
+        this.updateEffectiveQueue(previousItemId, true);
+        if (this.queue.length === 0) {
+            await this.resetQueueState();
+            return;
         }
-        else if (fromIndex < this.currentIndex && toIndex >= this.currentIndex) {
-            this.currentIndex -= 1;
-        }
-        else if (fromIndex > this.currentIndex && toIndex <= this.currentIndex) {
-            this.currentIndex += 1;
-        }
+        this.currentIndex =
+            previousItemId !== undefined
+                ? this.resolveQueueIndex(previousItemId)
+                : this.resolveQueueIndex(undefined, 0);
         this.bumpQueueRevision();
-        await this.notifyListeners('queueChange', await this.getQueue());
+        await this.emitQueueChange();
+        await this.emitStateChange(false);
     }
     async clearQueue() {
-        if (this.audio) {
-            this.internalOperation = true;
-            try {
-                this.audio.pause();
-                this.audio.currentTime = 0;
-                this.audio.src = '';
-            }
-            finally {
-                this.internalOperation = false;
-            }
-        }
-        this.queue = [];
-        this.currentIndex = 0;
-        this.status = 'stopped';
-        this.bumpQueueRevision();
-        this.bumpStateRevision();
-        await this.notifyListeners('queueChange', await this.getQueue());
-        await this.notifyListeners('stateChange', this.buildState());
+        await this.resetQueueState();
     }
     // Playback
     async play() {
-        if (!this.getCurrentItem() && this.queue.length > 0) {
-            this.currentIndex = 0;
-            await this.loadCurrent(false, 0);
+        const currentItem = this.getCurrentItem();
+        if (!currentItem) {
+            return;
+        }
+        if (!this.isCurrentItemLoaded()) {
+            await this.loadCurrent({
+                autoplay: true,
+                positionSeconds: 0,
+                inactiveStatus: 'stopped',
+            });
+            return;
         }
         const audio = this.ensureAudio();
-        this.internalOperation = true;
         try {
-            await audio.play();
+            await this.withSuppressedElementPlaybackEvents(async () => {
+                await audio.play();
+            });
         }
         catch (err) {
-            this.internalOperation = false;
             throw err instanceof Error ? err : new Error(String(err));
         }
-        this.internalOperation = false;
         this.status = 'playing';
-        this.bumpStateRevision();
-        await this.notifyListeners('stateChange', this.buildState());
+        this.startMetadataPollingIfNeeded();
+        await this.emitStateChange();
     }
     async pause() {
-        if (!this.audio) {
+        if (!this.audio || !this.getCurrentItem() || this.status === 'stopped') {
             return;
         }
-        this.internalOperation = true;
-        try {
-            this.audio.pause();
-        }
-        finally {
-            this.internalOperation = false;
-        }
+        await this.withSuppressedElementPlaybackEvents(() => {
+            var _a;
+            (_a = this.audio) === null || _a === void 0 ? void 0 : _a.pause();
+        });
         this.status = 'paused';
-        this.bumpStateRevision();
-        await this.notifyListeners('stateChange', this.buildState());
+        this.stopMetadataPolling();
+        await this.emitStateChange();
     }
     async stop() {
-        if (!this.audio) {
+        if (!this.audio || !this.getCurrentItem()) {
             return;
         }
-        this.internalOperation = true;
-        try {
+        await this.withSuppressedElementPlaybackEvents(() => {
+            if (!this.audio) {
+                return;
+            }
             this.audio.pause();
             this.audio.currentTime = 0;
-        }
-        finally {
-            this.internalOperation = false;
-        }
+        });
         this.status = 'stopped';
-        this.bumpStateRevision();
-        await this.notifyListeners('stateChange', this.buildState());
+        this.stopMetadataPolling();
+        await this.emitStateChange();
     }
     async seek(params) {
-        const audio = this.ensureAudio();
-        const target = Math.max(0, params.positionSeconds);
+        if (!this.audio || !this.getCurrentItem()) {
+            return;
+        }
+        const duration = this.getCurrentDuration();
+        const target = typeof duration === 'number'
+            ? Math.max(0, Math.min(params.positionSeconds, duration))
+            : Math.max(0, params.positionSeconds);
         try {
-            audio.currentTime = target;
+            this.audio.currentTime = target;
         }
         catch (err) {
             throw err instanceof Error ? err : new Error(String(err));
         }
-        this.notifyStateFromElement();
+        this.emitPassiveStateSnapshot();
     }
     async skipToPreviousInternal() {
-        const state = await this.getState();
+        const position = this.getCurrentPosition();
         const threshold = this.playbackOptions.previousThresholdSeconds;
-        if (state.position > threshold) {
+        if (position > threshold) {
             await this.seek({ positionSeconds: 0 });
             return;
         }
@@ -557,16 +933,25 @@ export class AudioPlayerWeb extends WebPlugin {
             await this.seek({ positionSeconds: 0 });
             return;
         }
+        const previousStatus = this.status;
         this.currentIndex -= 1;
-        await this.loadCurrent(true, 0);
+        await this.loadCurrent({
+            autoplay: previousStatus === 'playing',
+            positionSeconds: 0,
+            inactiveStatus: this.getInactiveStatusAfterLoad(previousStatus),
+        });
     }
     async skipToNext() {
         if (this.currentIndex >= this.queue.length - 1) {
-            // Already at the last item — no-op, matching native behavior.
             return;
         }
+        const previousStatus = this.status;
         this.currentIndex += 1;
-        await this.loadCurrent(true, 0);
+        await this.loadCurrent({
+            autoplay: previousStatus === 'playing',
+            positionSeconds: 0,
+            inactiveStatus: this.getInactiveStatusAfterLoad(previousStatus),
+        });
     }
     // Methods required by the interface
     async skipToPrevious() {
@@ -574,9 +959,16 @@ export class AudioPlayerWeb extends WebPlugin {
     }
     async skipToIndex(params) {
         var _a;
-        const index = Math.max(0, Math.min(params.index, this.queue.length - 1));
-        this.currentIndex = index;
-        await this.loadCurrent(true, (_a = params.positionSeconds) !== null && _a !== void 0 ? _a : 0);
+        if (this.queue.length === 0) {
+            return;
+        }
+        const previousStatus = this.status;
+        this.currentIndex = Math.max(0, Math.min(params.index, this.queue.length - 1));
+        await this.loadCurrent({
+            autoplay: previousStatus === 'playing',
+            positionSeconds: (_a = params.positionSeconds) !== null && _a !== void 0 ? _a : 0,
+            inactiveStatus: this.getInactiveStatusAfterLoad(previousStatus),
+        });
     }
     async setRate(params) {
         const clamped = Math.max(0.25, Math.min(4, params.rate));
@@ -584,8 +976,7 @@ export class AudioPlayerWeb extends WebPlugin {
         if (this.audio) {
             this.audio.playbackRate = clamped;
         }
-        this.bumpStateRevision();
-        await this.notifyListeners('stateChange', this.buildState());
+        await this.emitStateChange();
     }
     async setVolume(params) {
         const vol = Math.max(0, Math.min(100, params.volume));
@@ -593,8 +984,7 @@ export class AudioPlayerWeb extends WebPlugin {
         if (this.audio) {
             this.audio.volume = vol / 100;
         }
-        this.bumpStateRevision();
-        await this.notifyListeners('stateChange', this.buildState());
+        await this.emitStateChange();
     }
     async getState() {
         return this.buildState();
@@ -628,8 +1018,8 @@ export class AudioPlayerWeb extends WebPlugin {
     async setPlaybackOptions(params) {
         this.playbackOptions = Object.assign(Object.assign({}, this.playbackOptions), params);
         this.updateMediaSessionHandlers();
-        this.bumpStateRevision();
-        await this.notifyListeners('stateChange', this.buildState());
+        this.refreshMediaSessionState();
+        await this.emitStateChange();
     }
     getPlaybackOptions() {
         return Promise.resolve(this.playbackOptions);
@@ -637,13 +1027,36 @@ export class AudioPlayerWeb extends WebPlugin {
     // Playback modes
     async setRepeatMode(params) {
         this.repeatMode = params.repeatMode;
-        this.bumpStateRevision();
-        await this.notifyListeners('stateChange', this.buildState());
+        await this.emitStateChange();
     }
-    setShuffle(_params) {
-        // Shuffle playback is not implemented for the web platform.
-        // Explicitly reject so callers can handle the lack of support.
-        return Promise.reject(new Error('Shuffle playback is not supported on the web platform.'));
+    async setShuffle(params) {
+        var _a;
+        const previousItemId = (_a = this.getCurrentItem()) === null || _a === void 0 ? void 0 : _a.id;
+        const previousStatus = this.status;
+        const previousPosition = this.getCurrentPosition();
+        this.shuffle = params.shuffle;
+        this.updateEffectiveQueue(previousItemId);
+        if (this.queue.length === 0) {
+            this.bumpQueueRevision();
+            await this.emitQueueChange();
+            await this.emitStateChange(false);
+            return;
+        }
+        this.currentIndex = this.resolveQueueIndex(previousItemId, this.currentIndex);
+        this.bumpQueueRevision();
+        if (previousItemId && this.loadedItemId === previousItemId) {
+            await this.emitQueueChange();
+            await this.emitStateChange(false);
+            return;
+        }
+        const loaded = await this.loadCurrent({
+            autoplay: previousStatus === 'playing',
+            positionSeconds: previousPosition,
+            inactiveStatus: this.getInactiveStatusAfterLoad(previousStatus),
+        });
+        if (loaded) {
+            await this.emitQueueChange();
+        }
     }
 }
 //# sourceMappingURL=web.js.map
