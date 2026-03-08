@@ -131,21 +131,6 @@ class AudioPlayerWeb extends core.WebPlugin {
             this.suppressElementPlaybackEvents -= 1;
         }
     }
-    resolveEffectiveQueue() {
-        var _a, _b;
-        if (!this.shuffle) {
-            return [...this.baseQueue];
-        }
-        if (this.shuffleQueue) {
-            const baseIds = this.baseQueue.map(item => item.id);
-            const shuffleIds = this.shuffleQueue.map(item => item.id);
-            if (baseIds.length === shuffleIds.length && baseIds.every(id => shuffleIds.includes(id))) {
-                return [...this.shuffleQueue];
-            }
-        }
-        this.shuffleQueue = this.buildInitialShuffleQueue(this.baseQueue, (_a = this.getCurrentItem()) === null || _a === void 0 ? void 0 : _a.id);
-        return [...((_b = this.shuffleQueue) !== null && _b !== void 0 ? _b : this.baseQueue)];
-    }
     buildInitialShuffleQueue(base, currentItemId) {
         var _a;
         if (base.length < 2) {
@@ -732,6 +717,7 @@ class AudioPlayerWeb extends core.WebPlugin {
             if (typeof params.startPositionSeconds === 'number') {
                 await this.seekWithinLoadedCurrent(params.startPositionSeconds);
             }
+            this.refreshMediaSessionState();
             if (params.autoplay === true && this.status !== 'playing') {
                 await this.play();
                 await this.emitQueueChange();
@@ -741,6 +727,12 @@ class AudioPlayerWeb extends core.WebPlugin {
                 await this.pause();
                 await this.emitQueueChange();
                 return { queueRevision: this.queueRevision };
+            }
+            if (this.status === 'playing') {
+                this.startMetadataPollingIfNeeded();
+            }
+            else {
+                this.stopMetadataPolling();
             }
             await this.emitQueueChange();
             await this.emitStateChange(false);
