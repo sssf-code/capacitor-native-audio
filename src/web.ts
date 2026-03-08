@@ -179,23 +179,6 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         }
     }
 
-    private resolveEffectiveQueue(): QueueItem[] {
-        if (!this.shuffle) {
-            return [...this.baseQueue];
-        }
-
-        if (this.shuffleQueue) {
-            const baseIds = this.baseQueue.map(item => item.id);
-            const shuffleIds = this.shuffleQueue.map(item => item.id);
-            if (baseIds.length === shuffleIds.length && baseIds.every(id => shuffleIds.includes(id))) {
-                return [...this.shuffleQueue];
-            }
-        }
-
-        this.shuffleQueue = this.buildInitialShuffleQueue(this.baseQueue, this.getCurrentItem()?.id);
-        return [...(this.shuffleQueue ?? this.baseQueue)];
-    }
-
     private buildInitialShuffleQueue(base: QueueItem[], currentItemId?: string): QueueItem[] {
         if (base.length < 2) {
             return [...base];
@@ -883,6 +866,12 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
                 return { queueRevision: this.queueRevision };
             }
 
+            this.refreshMediaSessionState();
+            if (this.status === 'playing') {
+                this.startMetadataPollingIfNeeded();
+            } else {
+                this.stopMetadataPolling();
+            }
             await this.emitQueueChange();
             await this.emitStateChange(false);
             return { queueRevision: this.queueRevision };
