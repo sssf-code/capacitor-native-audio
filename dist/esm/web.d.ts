@@ -13,11 +13,13 @@ export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlug
     private shuffle;
     private playbackOptions;
     private progress;
+    private internalOperation;
     private ensureAudio;
     private bumpStateRevision;
     private bumpQueueRevision;
     private getCurrentItem;
     private updateMediaSessionMetadata;
+    private updateMediaSessionHandlers;
     private loadCurrent;
     private handleEnded;
     private notifyStateFromElement;
@@ -45,5 +47,5 @@ export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlug
     setPlaybackOptions(params: SetPlaybackOptionsParams): Promise<void>;
     getPlaybackOptions(): Promise<PlaybackOptions>;
     setRepeatMode(params: SetRepeatModeParams): Promise<void>;
-    setShuffle(params: SetShuffleParams): Promise<void>;
+    setShuffle(_params: SetShuffleParams): Promise<void>;
 }

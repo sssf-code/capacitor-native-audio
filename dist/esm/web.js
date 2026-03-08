@@ -23,6 +23,9 @@ export class AudioPlayerWeb extends WebPlugin {
         this.shuffle = false;
         this.playbackOptions = Object.assign({}, DEFAULT_PLAYBACK_OPTIONS);
         this.progress = new Map();
+        // Guard that suppresses 'play'/'pause' element event re-emissions when the
+        // change was already initiated (and will be notified) by a public method.
+        this.internalOperation = false;
     }
     ensureAudio() {
         if (this.audio) {
@@ -46,12 +49,15 @@ export class AudioPlayerWeb extends WebPlugin {
             this.handleEnded();
         });
         audio.addEventListener('play', () => {
+            if (!this.audio || this.internalOperation) {
+                return;
+            }
             this.status = 'playing';
             this.bumpStateRevision();
             this.notifyListeners('stateChange', this.buildState());
         });
         audio.addEventListener('pause', () => {
-            if (this.status === 'stopped') {
+            if (!this.audio || this.internalOperation || this.status === 'stopped') {
                 return;
             }
             this.status = 'paused';
@@ -101,46 +107,91 @@ export class AudioPlayerWeb extends WebPlugin {
                     ]
                     : [],
             });
-            anyNavigator.mediaSession.setActionHandler('play', async () => {
-                await this.play();
-            });
-            anyNavigator.mediaSession.setActionHandler('pause', async () => {
-                await this.pause();
-            });
-            anyNavigator.mediaSession.setActionHandler('stop', async () => {
-                await this.stop();
-            });
-            anyNavigator.mediaSession.setActionHandler('seekto', async (details) => {
-                if (typeof details.seekTime === 'number') {
-                    await this.seek({ positionSeconds: details.seekTime });
-                }
-            });
-            anyNavigator.mediaSession.setActionHandler('seekbackward', async (details) => {
-                const offset = typeof details.seekOffset === 'number'
-                    ? details.seekOffset
-                    : this.playbackOptions.skipBackwardSeconds;
-                const state = await this.getState();
-                const target = Math.max(0, state.position - offset);
-                await this.seek({ positionSeconds: target });
-            });
-            anyNavigator.mediaSession.setActionHandler('seekforward', async (details) => {
-                var _a;
-                const offset = typeof details.seekOffset === 'number'
-                    ? details.seekOffset
-                    : this.playbackOptions.skipForwardSeconds;
-                const state = await this.getState();
-                const duration = (_a = state.duration) !== null && _a !== void 0 ? _a : Number.MAX_SAFE_INTEGER;
-                const target = Math.min(duration, state.position + offset);
-                await this.seek({ positionSeconds: target });
-            });
-            anyNavigator.mediaSession.setActionHandler('previoustrack', async () => {
-                await this.skipToPrevious();
-            });
-            anyNavigator.mediaSession.setActionHandler('nexttrack', async () => {
-                await this.skipToNext();
-            });
+            this.updateMediaSessionHandlers(anyNavigator.mediaSession);
         }
         catch (_d) {
+            // Media Session is best-effort only
+        }
+    }
+    updateMediaSessionHandlers(mediaSession) {
+        var _a;
+        if (typeof navigator === 'undefined') {
+            return;
+        }
+        const anyNavigator = navigator;
+        const session = mediaSession !== null && mediaSession !== void 0 ? mediaSession : anyNavigator.mediaSession;
+        if (!session) {
+            return;
+        }
+        const opts = (_a = this.playbackOptions) !== null && _a !== void 0 ? _a : {};
+        try {
+            // Basic play/pause handlers are always enabled.
+            session.setActionHandler('play', async () => {
+                await this.play();
+            });
+            session.setActionHandler('pause', async () => {
+                await this.pause();
+            });
+            // Stop
+            if (opts.enableStop === false) {
+                session.setActionHandler('stop', null);
+            }
+            else {
+                session.setActionHandler('stop', async () => {
+                    await this.stop();
+                });
+            }
+            // SeekTo
+            if (opts.enableSeekTo === false) {
+                session.setActionHandler('seekto', null);
+            }
+            else {
+                session.setActionHandler('seekto', async (details) => {
+                    if (typeof details.seekTime === 'number') {
+                        await this.seek({ positionSeconds: details.seekTime });
+                    }
+                });
+            }
+            // Skip backward/forward
+            if (opts.enableSkipForwardBackward === false) {
+                session.setActionHandler('seekbackward', null);
+                session.setActionHandler('seekforward', null);
+            }
+            else {
+                session.setActionHandler('seekbackward', async (details) => {
+                    const offset = typeof details.seekOffset === 'number'
+                        ? details.seekOffset
+                        : this.playbackOptions.skipBackwardSeconds;
+                    const state = await this.getState();
+                    const target = Math.max(0, state.position - offset);
+                    await this.seek({ positionSeconds: target });
+                });
+                session.setActionHandler('seekforward', async (details) => {
+                    var _a;
+                    const offset = typeof details.seekOffset === 'number'
+                        ? details.seekOffset
+                        : this.playbackOptions.skipForwardSeconds;
+                    const state = await this.getState();
+                    const duration = (_a = state.duration) !== null && _a !== void 0 ? _a : Number.MAX_SAFE_INTEGER;
+                    const target = Math.min(duration, state.position + offset);
+                    await this.seek({ positionSeconds: target });
+                });
+            }
+            // Previous/next track
+            if (opts.enableNextPrev === false) {
+                session.setActionHandler('previoustrack', null);
+                session.setActionHandler('nexttrack', null);
+            }
+            else {
+                session.setActionHandler('previoustrack', async () => {
+                    await this.skipToPrevious();
+                });
+                session.setActionHandler('nexttrack', async () => {
+                    await this.skipToNext();
+                });
+            }
+        }
+        catch (_b) {
             // Media Session is best-effort only
         }
     }
@@ -150,9 +201,15 @@ export class AudioPlayerWeb extends WebPlugin {
             return;
         }
         const audio = this.ensureAudio();
-        audio.pause();
-        audio.currentTime = 0;
-        audio.src = item.src;
+        this.internalOperation = true;
+        try {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.src = item.src;
+        }
+        finally {
+            this.internalOperation = false;
+        }
         audio.playbackRate = this.rate;
         audio.volume = this.volume / 100;
         this.updateMediaSessionMetadata(item);
@@ -186,13 +243,19 @@ export class AudioPlayerWeb extends WebPlugin {
         }
         this.notifyStateFromElement();
         if (autoplay) {
-            await audio.play();
+            this.internalOperation = true;
+            try {
+                await audio.play();
+            }
+            finally {
+                this.internalOperation = false;
+            }
             this.status = 'playing';
             this.bumpStateRevision();
             this.notifyListeners('stateChange', this.buildState());
         }
         else {
-            this.status = 'paused';
+            this.status = 'stopped';
             this.bumpStateRevision();
             this.notifyListeners('stateChange', this.buildState());
         }
@@ -265,14 +328,74 @@ export class AudioPlayerWeb extends WebPlugin {
     async setQueue(params) {
         const { items, startIndex = 0, startPositionSeconds = 0, autoplay } = params;
         this.queue = [...items];
+        if (this.queue.length === 0) {
+            this.currentIndex = 0;
+            this.bumpQueueRevision();
+            if (this.audio) {
+                this.internalOperation = true;
+                try {
+                    this.audio.pause();
+                    this.audio.removeAttribute('src');
+                    this.audio.load();
+                }
+                finally {
+                    this.internalOperation = false;
+                }
+            }
+            await this.notifyListeners('queueChange', await this.getQueue());
+            return;
+        }
         this.currentIndex = Math.max(0, Math.min(startIndex, this.queue.length - 1));
         this.bumpQueueRevision();
         await this.loadCurrent(autoplay !== null && autoplay !== void 0 ? autoplay : false, startPositionSeconds);
+        await this.notifyListeners('queueChange', await this.getQueue());
     }
     async syncQueue(params) {
-        // For now, treat all modes as full replace. This matches how the app uses the plugin.
-        await this.setQueue(params);
-        return { queueRevision: this.queueRevision };
+        var _a, _b;
+        const mode = (_a = params.mode) !== null && _a !== void 0 ? _a : 'replace';
+        if (typeof params.expectedQueueRevision === 'number' &&
+            params.expectedQueueRevision !== this.queueRevision) {
+            throw new Error(`Queue revision mismatch: expected ${params.expectedQueueRevision}, got ${this.queueRevision}`);
+        }
+        if (mode === 'replace') {
+            await this.setQueue(params);
+            return { queueRevision: this.queueRevision };
+        }
+        if (mode === 'patch') {
+            const { items, startIndex = 0, startPositionSeconds = 0, autoplay, currentItemId, } = params;
+            const previousItemId = currentItemId !== null && currentItemId !== void 0 ? currentItemId : (_b = this.getCurrentItem()) === null || _b === void 0 ? void 0 : _b.id;
+            this.queue = [...items];
+            if (this.queue.length === 0) {
+                this.currentIndex = 0;
+                this.bumpQueueRevision();
+                if (this.audio) {
+                    this.internalOperation = true;
+                    try {
+                        this.audio.pause();
+                        this.audio.removeAttribute('src');
+                        this.audio.load();
+                    }
+                    finally {
+                        this.internalOperation = false;
+                    }
+                }
+                await this.notifyListeners('queueChange', await this.getQueue());
+                return { queueRevision: this.queueRevision };
+            }
+            let targetIndex = startIndex;
+            if (previousItemId) {
+                const preservedIndex = this.queue.findIndex(item => item.id === previousItemId);
+                if (preservedIndex !== -1) {
+                    targetIndex = preservedIndex;
+                }
+            }
+            this.currentIndex = Math.max(0, Math.min(targetIndex, this.queue.length - 1));
+            this.bumpQueueRevision();
+            await this.loadCurrent(autoplay !== null && autoplay !== void 0 ? autoplay : false, startPositionSeconds);
+            await this.notifyListeners('queueChange', await this.getQueue());
+            return { queueRevision: this.queueRevision };
+        }
+        throw new Error(`Unsupported syncQueue mode: ${String(mode)}`);
     }
     async getQueue() {
         var _a;
@@ -307,11 +430,12 @@ export class AudioPlayerWeb extends WebPlugin {
             this.currentIndex -= 1;
         }
         else if (this.currentIndex === idx) {
-            this.currentIndex = Math.min(this.currentIndex, this.queue.length - 1);
             if (this.queue.length === 0) {
+                this.currentIndex = 0;
                 await this.stop();
             }
             else {
+                this.currentIndex = Math.min(this.currentIndex, this.queue.length - 1);
                 await this.loadCurrent(false, 0);
             }
         }
@@ -342,9 +466,15 @@ export class AudioPlayerWeb extends WebPlugin {
     }
     async clearQueue() {
         if (this.audio) {
-            this.audio.pause();
-            this.audio.currentTime = 0;
-            this.audio.src = '';
+            this.internalOperation = true;
+            try {
+                this.audio.pause();
+                this.audio.currentTime = 0;
+                this.audio.src = '';
+            }
+            finally {
+                this.internalOperation = false;
+            }
         }
         this.queue = [];
         this.currentIndex = 0;
@@ -361,12 +491,15 @@ export class AudioPlayerWeb extends WebPlugin {
             await this.loadCurrent(false, 0);
         }
         const audio = this.ensureAudio();
+        this.internalOperation = true;
         try {
             await audio.play();
         }
         catch (err) {
+            this.internalOperation = false;
             throw err instanceof Error ? err : new Error(String(err));
         }
+        this.internalOperation = false;
         this.status = 'playing';
         this.bumpStateRevision();
         await this.notifyListeners('stateChange', this.buildState());
@@ -375,7 +508,13 @@ export class AudioPlayerWeb extends WebPlugin {
         if (!this.audio) {
             return;
         }
-        this.audio.pause();
+        this.internalOperation = true;
+        try {
+            this.audio.pause();
+        }
+        finally {
+            this.internalOperation = false;
+        }
         this.status = 'paused';
         this.bumpStateRevision();
         await this.notifyListeners('stateChange', this.buildState());
@@ -384,8 +523,14 @@ export class AudioPlayerWeb extends WebPlugin {
         if (!this.audio) {
             return;
         }
-        this.audio.pause();
-        this.audio.currentTime = 0;
+        this.internalOperation = true;
+        try {
+            this.audio.pause();
+            this.audio.currentTime = 0;
+        }
+        finally {
+            this.internalOperation = false;
+        }
         this.status = 'stopped';
         this.bumpStateRevision();
         await this.notifyListeners('stateChange', this.buildState());
@@ -417,7 +562,7 @@ export class AudioPlayerWeb extends WebPlugin {
     }
     async skipToNext() {
         if (this.currentIndex >= this.queue.length - 1) {
-            await this.stop();
+            // Already at the last item — no-op, matching native behavior.
             return;
         }
         this.currentIndex += 1;
@@ -434,7 +579,7 @@ export class AudioPlayerWeb extends WebPlugin {
         await this.loadCurrent(true, (_a = params.positionSeconds) !== null && _a !== void 0 ? _a : 0);
     }
     async setRate(params) {
-        const clamped = Math.max(0.5, Math.min(2, params.rate));
+        const clamped = Math.max(0.25, Math.min(4, params.rate));
         this.rate = clamped;
         if (this.audio) {
             this.audio.playbackRate = clamped;
@@ -480,21 +625,25 @@ export class AudioPlayerWeb extends WebPlugin {
         });
     }
     // Options
-    setPlaybackOptions(params) {
+    async setPlaybackOptions(params) {
         this.playbackOptions = Object.assign(Object.assign({}, this.playbackOptions), params);
-        return Promise.resolve();
+        this.updateMediaSessionHandlers();
+        this.bumpStateRevision();
+        await this.notifyListeners('stateChange', this.buildState());
     }
     getPlaybackOptions() {
         return Promise.resolve(this.playbackOptions);
     }
     // Playback modes
-    setRepeatMode(params) {
+    async setRepeatMode(params) {
         this.repeatMode = params.repeatMode;
-        return Promise.resolve();
+        this.bumpStateRevision();
+        await this.notifyListeners('stateChange', this.buildState());
     }
-    setShuffle(params) {
-        this.shuffle = params.shuffle;
-        return Promise.resolve();
+    setShuffle(_params) {
+        // Shuffle playback is not implemented for the web platform.
+        // Explicitly reject so callers can handle the lack of support.
+        return Promise.reject(new Error('Shuffle playback is not supported on the web platform.'));
     }
 }
 //# sourceMappingURL=web.js.map
