@@ -29,6 +29,8 @@ export class AudioPlayerWeb extends WebPlugin {
         this.loadGeneration = 0;
         this.loadedItemId = null;
         this.metadataPollTimer = null;
+        this.metadataPollGeneration = 0;
+        this.metadataPollInFlight = null;
         this.metadataFingerprintByItemId = new Map();
     }
     ensureAudio() {
@@ -352,7 +354,6 @@ export class AudioPlayerWeb extends WebPlugin {
             return;
         }
         this.updateMediaSessionPositionState();
-        void this.notifyListeners('stateChange', this.buildState());
     }
     async emitTrackChange() {
         const item = this.getCurrentItem();
@@ -393,6 +394,7 @@ export class AudioPlayerWeb extends WebPlugin {
         this.queue = [];
         this.currentIndex = 0;
         this.status = 'stopped';
+        this.metadataFingerprintByItemId.clear();
         await this.resetAudioForEmptyQueue();
         this.bumpQueueRevision();
         await this.emitQueueChange();
@@ -508,8 +510,17 @@ export class AudioPlayerWeb extends WebPlugin {
             return;
         }
         const intervalSeconds = Math.max(5, (_a = item.metadataUpdateInterval) !== null && _a !== void 0 ? _a : 15);
+        const pollGeneration = ++this.metadataPollGeneration;
         this.metadataPollTimer = setInterval(() => {
-            void this.fetchAndApplyMetadata(item.id, item.metadataUpdateUrl);
+            if (pollGeneration !== this.metadataPollGeneration || this.metadataPollInFlight) {
+                return;
+            }
+            const pollRequest = this.fetchAndApplyMetadata(item.id, item.metadataUpdateUrl, pollGeneration);
+            this.metadataPollInFlight = pollRequest.finally(() => {
+                if (this.metadataPollInFlight === pollRequest) {
+                    this.metadataPollInFlight = null;
+                }
+            });
         }, intervalSeconds * 1000);
     }
     stopMetadataPolling() {
@@ -517,6 +528,7 @@ export class AudioPlayerWeb extends WebPlugin {
             clearInterval(this.metadataPollTimer);
             this.metadataPollTimer = null;
         }
+        this.metadataPollGeneration += 1;
     }
     replaceItemEverywhere(itemId, updated) {
         this.baseQueue = this.baseQueue.map(item => (item.id === itemId ? updated : item));
@@ -525,7 +537,7 @@ export class AudioPlayerWeb extends WebPlugin {
             this.shuffleQueue = this.shuffleQueue.map(item => (item.id === itemId ? updated : item));
         }
     }
-    async fetchAndApplyMetadata(itemId, url) {
+    async fetchAndApplyMetadata(itemId, url, pollGeneration) {
         var _a, _b, _c, _d;
         try {
             const response = await fetch(url);
@@ -533,6 +545,10 @@ export class AudioPlayerWeb extends WebPlugin {
                 return;
             }
             const payload = (await response.json());
+            if (typeof pollGeneration === 'number' &&
+                pollGeneration !== this.metadataPollGeneration) {
+                return;
+            }
             const title = typeof payload.title === 'string' ? payload.title : undefined;
             const artist = typeof payload.artist === 'string' ? payload.artist : undefined;
             const album = typeof payload.album === 'string' ? payload.album : undefined;
@@ -819,15 +835,17 @@ export class AudioPlayerWeb extends WebPlugin {
     async moveQueueItem(params) {
         var _a;
         const { fromIndex, toIndex } = params;
+        const queueLength = this.baseQueue.length;
         if (fromIndex < 0 ||
-            fromIndex >= this.baseQueue.length ||
+            fromIndex >= queueLength ||
             toIndex < 0 ||
-            toIndex >= this.baseQueue.length) {
+            toIndex > queueLength) {
             return;
         }
         const previousItemId = (_a = this.getCurrentItem()) === null || _a === void 0 ? void 0 : _a.id;
         const [item] = this.baseQueue.splice(fromIndex, 1);
-        this.baseQueue.splice(toIndex, 0, item);
+        const insertionIndex = Math.max(0, Math.min(toIndex, this.baseQueue.length));
+        this.baseQueue.splice(insertionIndex, 0, item);
         this.updateEffectiveQueue(previousItemId, true);
         if (this.queue.length === 0) {
             await this.resetQueueState();
