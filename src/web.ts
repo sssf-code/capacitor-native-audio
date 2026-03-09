@@ -1013,7 +1013,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
 
         const previousItemId = this.getCurrentItem()?.id;
         const [item] = this.baseQueue.splice(fromIndex, 1);
-        const insertionIndex = Math.max(0, Math.min(toIndex, this.baseQueue.length));
+        const insertionIndex = Math.min(toIndex, this.baseQueue.length);
         this.baseQueue.splice(insertionIndex, 0, item);
         this.updateEffectiveQueue(previousItemId, true);
 

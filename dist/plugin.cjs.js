@@ -851,7 +851,7 @@ class AudioPlayerWeb extends core.WebPlugin {
         }
         const previousItemId = (_a = this.getCurrentItem()) === null || _a === void 0 ? void 0 : _a.id;
         const [item] = this.baseQueue.splice(fromIndex, 1);
-        const insertionIndex = Math.max(0, Math.min(toIndex, this.baseQueue.length));
+        const insertionIndex = Math.min(toIndex, this.baseQueue.length);
         this.baseQueue.splice(insertionIndex, 0, item);
         this.updateEffectiveQueue(previousItemId, true);
         if (this.queue.length === 0) {
