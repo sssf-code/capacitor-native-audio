@@ -1129,7 +1129,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         } catch (err) {
             throw err instanceof Error ? err : new Error(String(err));
         }
-        this.emitPassiveStateSnapshot();
+        await this.emitStateChange();
     }
 
     private async skipToPreviousInternal(): Promise<void> {
