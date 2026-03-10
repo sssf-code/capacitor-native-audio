@@ -65,6 +65,8 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
     private loadGeneration = 0;
     private loadedItemId: string | null = null;
     private metadataPollTimer: ReturnType<typeof setInterval> | null = null;
+    private metadataPollGeneration = 0;
+    private metadataPollInFlight: Promise<void> | null = null;
     private metadataFingerprintByItemId = new Map<string, string>();
 
     private ensureAudio(): HTMLAudioElement {
@@ -434,7 +436,6 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             return;
         }
         this.updateMediaSessionPositionState();
-        void this.notifyListeners('stateChange', this.buildState());
     }
 
     private async emitTrackChange() {
@@ -480,6 +481,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         this.queue = [];
         this.currentIndex = 0;
         this.status = 'stopped';
+        this.metadataFingerprintByItemId.clear();
         await this.resetAudioForEmptyQueue();
         this.bumpQueueRevision();
         await this.emitQueueChange();
@@ -619,8 +621,23 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         }
 
         const intervalSeconds = Math.max(5, item.metadataUpdateInterval ?? 15);
+        const pollGeneration = ++this.metadataPollGeneration;
         this.metadataPollTimer = setInterval(() => {
-            void this.fetchAndApplyMetadata(item.id, item.metadataUpdateUrl as string);
+            if (pollGeneration !== this.metadataPollGeneration || this.metadataPollInFlight) {
+                return;
+            }
+
+            const inFlightPromise = this.fetchAndApplyMetadata(
+                item.id,
+                item.metadataUpdateUrl as string,
+                pollGeneration,
+            ).finally(() => {
+                if (this.metadataPollInFlight === inFlightPromise) {
+                    this.metadataPollInFlight = null;
+                }
+            });
+
+            this.metadataPollInFlight = inFlightPromise;
         }, intervalSeconds * 1000);
     }
 
@@ -629,6 +646,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             clearInterval(this.metadataPollTimer);
             this.metadataPollTimer = null;
         }
+        this.metadataPollGeneration += 1;
     }
 
     private replaceItemEverywhere(itemId: string, updated: QueueItem) {
@@ -639,7 +657,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         }
     }
 
-    private async fetchAndApplyMetadata(itemId: string, url: string) {
+    private async fetchAndApplyMetadata(itemId: string, url: string, pollGeneration?: number) {
         try {
             const response = await fetch(url);
             if (!response.ok) {
@@ -647,6 +665,12 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             }
 
             const payload = (await response.json()) as MetadataPatch;
+            if (
+                typeof pollGeneration === 'number' &&
+                pollGeneration !== this.metadataPollGeneration
+            ) {
+                return;
+            }
             const title = typeof payload.title === 'string' ? payload.title : undefined;
             const artist = typeof payload.artist === 'string' ? payload.artist : undefined;
             const album = typeof payload.album === 'string' ? payload.album : undefined;
@@ -978,18 +1002,20 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
 
     async moveQueueItem(params: MoveQueueItemParams): Promise<void> {
         const { fromIndex, toIndex } = params;
+        const queueLength = this.baseQueue.length;
         if (
             fromIndex < 0 ||
-            fromIndex >= this.baseQueue.length ||
+            fromIndex >= queueLength ||
             toIndex < 0 ||
-            toIndex >= this.baseQueue.length
+            toIndex > queueLength
         ) {
             return;
         }
 
         const previousItemId = this.getCurrentItem()?.id;
         const [item] = this.baseQueue.splice(fromIndex, 1);
-        this.baseQueue.splice(toIndex, 0, item);
+        const insertionIndex = Math.min(toIndex, this.baseQueue.length);
+        this.baseQueue.splice(insertionIndex, 0, item);
         this.updateEffectiveQueue(previousItemId, true);
 
         if (this.queue.length === 0) {
