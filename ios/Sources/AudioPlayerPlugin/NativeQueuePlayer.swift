@@ -753,10 +753,34 @@ final class NativeQueuePlayer {
             updatedAtEpochMs: Int64(Date().timeIntervalSince1970 * 1000)
         )
 
+        let shouldAutoplayNext = options.autoplayNext
+
         // Repeat semantics.
-        if options.enableNextPrev, state.repeatMode == .one {
+        if options.enableNextPrev, shouldAutoplayNext, state.repeatMode == .one {
             skipToIndex(idx, positionSeconds: 0)
             play()
+            return
+        }
+
+        if !shouldAutoplayNext {
+            player.pause()
+            isStopped = false
+            state.status = .paused
+            state.position = endedPosition
+            state.duration = endedDuration
+            bumpStateRevision()
+            persist()
+            stopMetadataPolling()
+            let notifyAfterSeek = { [weak self] in
+                guard let self else { return }
+                self.notifyStateChange()
+                self.refreshNowPlaying()
+            }
+            if endedPosition > 0 {
+                player.seek(to: CMTime(seconds: endedPosition, preferredTimescale: seekTimescale)) { _ in notifyAfterSeek() }
+            } else {
+                notifyAfterSeek()
+            }
             return
         }
 
