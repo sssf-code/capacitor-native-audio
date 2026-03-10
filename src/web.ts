@@ -237,7 +237,8 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         const prefixItems = prefixIds
             .map(id => baseById.get(id))
             .filter((item): item is QueueItem => !!item);
-        const remaining = this.baseQueue.filter(item => !prefixIds.includes(item.id));
+        const prefixIdSet = new Set(prefixIds);
+        const remaining = this.baseQueue.filter(item => !prefixIdSet.has(item.id));
 
         for (let idx = remaining.length - 1; idx > 0; idx -= 1) {
             const swapIdx = Math.floor(Math.random() * (idx + 1));
