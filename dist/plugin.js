@@ -34,6 +34,7 @@ var capacitorAudioPlayer = (function (exports, core) {
             this.suppressElementPlaybackEvents = 0;
             this.loadGeneration = 0;
             this.loadedItemId = null;
+            this.loadedSrc = null;
             this.metadataPollTimer = null;
             this.metadataPollGeneration = 0;
             this.metadataPollInFlight = null;
@@ -379,6 +380,7 @@ var capacitorAudioPlayer = (function (exports, core) {
             this.stopMetadataPolling();
             this.loadGeneration += 1;
             this.loadedItemId = null;
+            this.loadedSrc = null;
             if (!this.audio) {
                 this.refreshMediaSessionState();
                 return;
@@ -423,6 +425,7 @@ var capacitorAudioPlayer = (function (exports, core) {
             const loadGeneration = ++this.loadGeneration;
             this.stopMetadataPolling();
             this.loadedItemId = null;
+            this.loadedSrc = null;
             await this.withSuppressedElementPlaybackEvents(async () => {
                 audio.pause();
                 audio.currentTime = 0;
@@ -473,6 +476,7 @@ var capacitorAudioPlayer = (function (exports, core) {
                 audio.currentTime = clamped;
             }
             this.loadedItemId = item.id;
+            this.loadedSrc = item.src;
             if (options.autoplay) {
                 await this.withSuppressedElementPlaybackEvents(async () => {
                     await audio.play();
@@ -696,11 +700,16 @@ var capacitorAudioPlayer = (function (exports, core) {
                 throw new Error(`Queue revision mismatch: expected ${params.expectedQueueRevision}, got ${this.queueRevision}`);
             }
             if (mode === 'replace' || hasExplicitStart) {
+                let startIndex = params.startIndex;
+                if (params.currentItemId) {
+                    const foundIndex = params.items.findIndex(item => item.id === params.currentItemId);
+                    if (foundIndex !== -1) {
+                        startIndex = foundIndex;
+                    }
+                }
                 await this.setQueue({
                     items: params.items,
-                    startIndex: params.currentItemId
-                        ? params.items.findIndex(item => item.id === params.currentItemId)
-                        : params.startIndex,
+                    startIndex,
                     startPositionSeconds: params.startPositionSeconds,
                     autoplay: params.autoplay,
                 });
@@ -729,29 +738,33 @@ var capacitorAudioPlayer = (function (exports, core) {
                     : this.resolveQueueIndex(undefined, params.startIndex);
             this.bumpQueueRevision();
             if (preservedIndex !== -1 && this.loadedItemId === previousItemId && this.audio) {
-                if (typeof params.startPositionSeconds === 'number') {
-                    await this.seekWithinLoadedCurrent(params.startPositionSeconds);
-                }
-                this.refreshMediaSessionState();
-                if (params.autoplay === true && this.status !== 'playing') {
-                    await this.play();
+                const currentItem = this.getCurrentItem();
+                const srcChanged = currentItem ? currentItem.src !== this.loadedSrc : false;
+                if (!srcChanged) {
+                    if (typeof params.startPositionSeconds === 'number') {
+                        await this.seekWithinLoadedCurrent(params.startPositionSeconds);
+                    }
+                    this.refreshMediaSessionState();
+                    if (params.autoplay === true && this.status !== 'playing') {
+                        await this.play();
+                        await this.emitQueueChange();
+                        return { queueRevision: this.queueRevision };
+                    }
+                    if (params.autoplay === false && this.status === 'playing') {
+                        await this.pause();
+                        await this.emitQueueChange();
+                        return { queueRevision: this.queueRevision };
+                    }
+                    if (this.status === 'playing') {
+                        this.startMetadataPollingIfNeeded();
+                    }
+                    else {
+                        this.stopMetadataPolling();
+                    }
                     await this.emitQueueChange();
+                    await this.emitStateChange(false);
                     return { queueRevision: this.queueRevision };
                 }
-                if (params.autoplay === false && this.status === 'playing') {
-                    await this.pause();
-                    await this.emitQueueChange();
-                    return { queueRevision: this.queueRevision };
-                }
-                if (this.status === 'playing') {
-                    this.startMetadataPollingIfNeeded();
-                }
-                else {
-                    this.stopMetadataPolling();
-                }
-                await this.emitQueueChange();
-                await this.emitStateChange(false);
-                return { queueRevision: this.queueRevision };
             }
             const loaded = await this.loadCurrent({
                 autoplay: shouldAutoplay,

@@ -18,6 +18,7 @@ export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlug
     private suppressElementPlaybackEvents;
     private loadGeneration;
     private loadedItemId;
+    private loadedSrc;
     private metadataPollTimer;
     private metadataPollGeneration;
     private metadataPollInFlight;
