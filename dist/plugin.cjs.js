@@ -176,7 +176,8 @@ class AudioPlayerWeb extends core.WebPlugin {
         const prefixItems = prefixIds
             .map(id => baseById.get(id))
             .filter((item) => !!item);
-        const remaining = this.baseQueue.filter(item => !prefixIds.includes(item.id));
+        const prefixIdSet = new Set(prefixIds);
+        const remaining = this.baseQueue.filter(item => !prefixIdSet.has(item.id));
         for (let idx = remaining.length - 1; idx > 0; idx -= 1) {
             const swapIdx = Math.floor(Math.random() * (idx + 1));
             [remaining[idx], remaining[swapIdx]] = [remaining[swapIdx], remaining[idx]];
@@ -953,7 +954,7 @@ class AudioPlayerWeb extends core.WebPlugin {
         catch (err) {
             throw err instanceof Error ? err : new Error(String(err));
         }
-        this.emitPassiveStateSnapshot();
+        await this.emitStateChange();
     }
     async skipToPreviousInternal() {
         const position = this.getCurrentPosition();
