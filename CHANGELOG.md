@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased](https://github.com/mediagrid/capacitor-native-audio/compare/v3.0.0...HEAD)
+## [Unreleased](https://github.com/mediagrid/capacitor-native-audio/compare/v4.1.0...HEAD)
+
+## [v4.1.0](https://github.com/mediagrid/capacitor-native-audio/compare/v3.0.0...v4.1.0) - 2026-03-05
+
+### What's Changed
+
+- feat(web): add HTML5 queue-based implementation with Media Session integration
+- feat: expose unified state, queue, and trackChange events on web matching native behavior
 
 ## [v3.0.0](https://github.com/mediagrid/capacitor-native-audio/compare/v2.3.2...v3.0.0) - 2026-01-23
 

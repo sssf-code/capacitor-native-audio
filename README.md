@@ -2,9 +2,10 @@
 
 ## Description
 
-Unified **native queue player** (playlist + media session) for Capacitor apps.
+Unified **queue-based audio player** (playlist + media session) for Capacitor apps, with native (Android/iOS) and HTML5 web implementations.
 
-- Native owns playback + OS media controls (works while WebView is suspended)
+- Native layer owns playback + OS media controls (works while WebView is suspended)
+- Web uses an HTML5 `<audio>` element with the same queue/state model
 - React/JS owns the queue definition while foregrounded
 - Queue + position + options are persisted so state survives restarts
 - Foreground UI reconciles via `getState()` / `getQueue()`
@@ -14,7 +15,7 @@ Unified **native queue player** (playlist + media session) for Capacitor apps.
 ### For Capacitor 8
 
 ```bash
-pnpm add github:sssf-code/capacitor-native-audio#queue2
+pnpm add github:sssf-code/capacitor-native-audio#main
 npx cap sync
 ```
 
@@ -60,11 +61,11 @@ Set the notification small icon drawable name via Capacitor config:
 
 ```json
 {
-  "plugins": {
-    "AudioPlayer": {
-      "smallIcon": "ic_media_play"
+    "plugins": {
+        "AudioPlayer": {
+            "smallIcon": "ic_media_play"
+        }
     }
-  }
 }
 ```
 
