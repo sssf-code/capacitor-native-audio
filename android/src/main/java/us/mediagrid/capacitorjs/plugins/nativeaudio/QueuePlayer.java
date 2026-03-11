@@ -323,6 +323,7 @@ final class QueuePlayer implements Player.Listener {
             String desiredId = currentItemId != null ? currentItemId : getCurrentItemId();
             long posMs = player.getCurrentPosition();
             boolean playWhenReady = player.getPlayWhenReady();
+            boolean wasStopped = isStopped;
             int idx = 0;
             if (desiredId != null) {
                 for (int i = 0; i < items.size(); i++) {
@@ -335,26 +336,35 @@ final class QueuePlayer implements Player.Listener {
             rebuildQueue(items, desiredId, idx, posMs / 1000.0, true);
             if (autoplay == null) {
                 player.setPlayWhenReady(playWhenReady);
+                if (playWhenReady) {
+                    persistPlayingState();
+                } else if (!wasStopped) {
+                    persistPausedState();
+                }
             } else if (autoplay) {
-                player.play();
-                isStopped = false;
+                persistPlayingState();
             } else {
-                player.pause();
-                isStopped = false;
+                persistPausedState();
             }
             startMetadataPollingIfNeeded();
             return;
         }
 
+        boolean playWhenReady = player.getPlayWhenReady();
+        boolean wasStopped = isStopped;
         rebuildQueue(items, currentItemId, startIndex, startPosSeconds, true);
         if (autoplay == null) {
             // Preserve the current play/pause state when autoplay is omitted.
+            player.setPlayWhenReady(playWhenReady);
+            if (playWhenReady) {
+                persistPlayingState();
+            } else if (!wasStopped) {
+                persistPausedState();
+            }
         } else if (autoplay) {
-            player.play();
-            isStopped = false;
+            persistPlayingState();
         } else {
-            player.pause();
-            isStopped = false;
+            persistPausedState();
         }
         startMetadataPollingIfNeeded();
     }
@@ -477,6 +487,22 @@ final class QueuePlayer implements Player.Listener {
         startMetadataPollingIfNeeded();
         startProgressUpdatesIfNeeded();
         updateCustomLayoutIfNeeded();
+    }
+
+    private void persistPausedState() {
+        player.pause();
+        isStopped = false;
+        status = "paused";
+        bumpStateRevision();
+        persist();
+    }
+
+    private void persistPlayingState() {
+        player.play();
+        isStopped = false;
+        status = "playing";
+        bumpStateRevision();
+        persist();
     }
 
     private void clearQueueInternal() {
