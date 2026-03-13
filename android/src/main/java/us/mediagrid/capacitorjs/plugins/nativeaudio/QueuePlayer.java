@@ -350,21 +350,15 @@ final class QueuePlayer implements Player.Listener {
             return;
         }
 
-        boolean playWhenReady = player.getPlayWhenReady();
-        boolean wasStopped = isStopped;
         rebuildQueue(items, currentItemId, startIndex, startPosSeconds, true);
         if (autoplay == null) {
-            // Preserve the current play/pause state when autoplay is omitted.
-            player.setPlayWhenReady(playWhenReady);
-            if (playWhenReady) {
-                persistPlayingState();
-            } else if (!wasStopped) {
-                persistPausedState();
-            }
+            // Keep setQueue/replace stopped unless autoplay is explicitly enabled.
         } else if (autoplay) {
             persistPlayingState();
         } else {
-            persistPausedState();
+            player.setPlayWhenReady(false);
+            isStopped = true;
+            status = "stopped";
         }
         startMetadataPollingIfNeeded();
     }

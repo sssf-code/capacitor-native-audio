@@ -96,6 +96,61 @@ struct PlaybackOptions: Codable, Equatable {
     var androidNotificationSmallIcon: String? = nil
 }
 
+extension PlaybackOptions {
+    private enum CodingKeys: String, CodingKey {
+        case previousThresholdSeconds
+        case skipForwardSeconds
+        case skipBackwardSeconds
+        case enableNextPrev
+        case enableSeekTo
+        case enableSkipForwardBackward
+        case enableStop
+        case autoplayNext
+        case androidNotificationSmallIcon
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        previousThresholdSeconds = try container.decodeIfPresent(
+            Double.self,
+            forKey: .previousThresholdSeconds
+        ) ?? 7
+        skipForwardSeconds = try container.decodeIfPresent(
+            Double.self,
+            forKey: .skipForwardSeconds
+        ) ?? 10
+        skipBackwardSeconds = try container.decodeIfPresent(
+            Double.self,
+            forKey: .skipBackwardSeconds
+        ) ?? 10
+        enableNextPrev = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .enableNextPrev
+        ) ?? true
+        enableSeekTo = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .enableSeekTo
+        ) ?? true
+        enableSkipForwardBackward = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .enableSkipForwardBackward
+        ) ?? true
+        enableStop = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .enableStop
+        ) ?? true
+        autoplayNext = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .autoplayNext
+        ) ?? true
+        androidNotificationSmallIcon = try container.decodeIfPresent(
+            String.self,
+            forKey: .androidNotificationSmallIcon
+        )
+    }
+}
+
 struct PlayerState: Codable, Equatable {
     var stateRevision: Int64 = 0
     var queueRevision: Int64 = 0
@@ -120,4 +175,3 @@ struct PersistedState: Codable {
     var options: PlaybackOptions
     var state: PlayerState
 }
-
