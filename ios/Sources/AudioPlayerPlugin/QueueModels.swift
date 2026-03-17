@@ -94,6 +94,21 @@ struct PlaybackOptions: Codable, Equatable {
     var enableStop: Bool = true
     var autoplayNext: Bool = true
     var androidNotificationSmallIcon: String? = nil
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        previousThresholdSeconds = try c.decodeIfPresent(Double.self, forKey: .previousThresholdSeconds) ?? 7
+        skipForwardSeconds = try c.decodeIfPresent(Double.self, forKey: .skipForwardSeconds) ?? 10
+        skipBackwardSeconds = try c.decodeIfPresent(Double.self, forKey: .skipBackwardSeconds) ?? 10
+        enableNextPrev = try c.decodeIfPresent(Bool.self, forKey: .enableNextPrev) ?? true
+        enableSeekTo = try c.decodeIfPresent(Bool.self, forKey: .enableSeekTo) ?? true
+        enableSkipForwardBackward = try c.decodeIfPresent(Bool.self, forKey: .enableSkipForwardBackward) ?? true
+        enableStop = try c.decodeIfPresent(Bool.self, forKey: .enableStop) ?? true
+        autoplayNext = try c.decodeIfPresent(Bool.self, forKey: .autoplayNext) ?? true
+        androidNotificationSmallIcon = try c.decodeIfPresent(String.self, forKey: .androidNotificationSmallIcon)
+    }
 }
 
 struct PlayerState: Codable, Equatable {
