@@ -44,6 +44,7 @@ const DEFAULT_PLAYBACK_OPTIONS: PlaybackOptions = {
     enableSeekTo: true,
     enableSkipForwardBackward: true,
     enableStop: true,
+    autoplayNext: true,
 };
 
 export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
@@ -746,6 +747,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
     private async handleEnded() {
         const item = this.getCurrentItem();
         const now = Date.now();
+        const shouldAutoplayNext = this.playbackOptions.autoplayNext !== false;
 
         if (item) {
             const existing = this.progress.get(item.id);
@@ -759,9 +761,16 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             });
         }
 
-        if (this.repeatMode === 'one') {
+        if (this.repeatMode === 'one' && shouldAutoplayNext) {
             await this.seek({ positionSeconds: 0 });
             await this.play();
+            return;
+        }
+
+        if (!shouldAutoplayNext) {
+            this.stopMetadataPolling();
+            this.status = 'paused';
+            await this.emitStateChange();
             return;
         }
 

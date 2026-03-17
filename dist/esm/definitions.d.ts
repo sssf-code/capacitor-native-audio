@@ -93,6 +93,18 @@ export interface PlaybackOptions {
      */
     enableStop: boolean;
     /**
+     * Whether playback should automatically continue to the next queue item
+     * (and honor repeat modes) when the current item finishes.
+     *
+     * When false, playback will pause at the end of each item and will only
+     * move forward when the user explicitly invokes "next" (via app UI or
+     * native controls). Repeat modes are effectively disabled when this flag
+     * is false.
+     *
+     * @default true
+     */
+    autoplayNext?: boolean;
+    /**
      * Android-only: override the drawable name for the notification small icon.
      * (No extension, no `R.drawable.` prefix.)
      */

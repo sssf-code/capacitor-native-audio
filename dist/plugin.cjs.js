@@ -14,6 +14,7 @@ const DEFAULT_PLAYBACK_OPTIONS = {
     enableSeekTo: true,
     enableSkipForwardBackward: true,
     enableStop: true,
+    autoplayNext: true,
 };
 class AudioPlayerWeb extends core.WebPlugin {
     constructor() {
@@ -622,6 +623,7 @@ class AudioPlayerWeb extends core.WebPlugin {
         var _a, _b;
         const item = this.getCurrentItem();
         const now = Date.now();
+        const shouldAutoplayNext = this.playbackOptions.autoplayNext !== false;
         if (item) {
             const existing = this.progress.get(item.id);
             const durationSeconds = (_b = (_a = this.getCurrentDuration()) !== null && _a !== void 0 ? _a : existing === null || existing === void 0 ? void 0 : existing.durationSeconds) !== null && _b !== void 0 ? _b : 0;
@@ -633,9 +635,15 @@ class AudioPlayerWeb extends core.WebPlugin {
                 updatedAtEpochMs: now,
             });
         }
-        if (this.repeatMode === 'one') {
+        if (this.repeatMode === 'one' && shouldAutoplayNext) {
             await this.seek({ positionSeconds: 0 });
             await this.play();
+            return;
+        }
+        if (!shouldAutoplayNext) {
+            this.stopMetadataPolling();
+            this.status = 'paused';
+            await this.emitStateChange();
             return;
         }
         const lastIndex = this.queue.length - 1;

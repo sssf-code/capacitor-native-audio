@@ -103,6 +103,7 @@ final class QueuePlayer implements Player.Listener {
             options.androidNotificationSmallIcon = cfgIcon;
         }
 
+        applyAutoplayNextToPlayer();
         restoreIfAvailable();
     }
 
@@ -313,7 +314,8 @@ final class QueuePlayer implements Player.Listener {
             args != null && (args.has("startIndex") || args.has("startPositionSeconds"));
         int startIndex = args != null && args.has("startIndex") ? args.optInt("startIndex", 0) : 0;
         double startPosSeconds = args != null ? args.optDouble("startPositionSeconds", 0) : 0;
-        boolean autoplay = args != null && args.optBoolean("autoplay", false);
+        Boolean autoplay =
+            args != null && args.has("autoplay") ? args.optBoolean("autoplay", false) : null;
         String currentItemId = args != null ? args.optString("currentItemId", null) : null;
 
         if ("patch".equals(mode) && !hasExplicitStart) {
@@ -321,6 +323,7 @@ final class QueuePlayer implements Player.Listener {
             String desiredId = currentItemId != null ? currentItemId : getCurrentItemId();
             long posMs = player.getCurrentPosition();
             boolean playWhenReady = player.getPlayWhenReady();
+            boolean wasStopped = isStopped;
             int idx = 0;
             if (desiredId != null) {
                 for (int i = 0; i < items.size(); i++) {
@@ -331,19 +334,27 @@ final class QueuePlayer implements Player.Listener {
                 }
             }
             rebuildQueue(items, desiredId, idx, posMs / 1000.0, true);
-            player.setPlayWhenReady(playWhenReady);
-            if (autoplay) {
-                player.play();
-                isStopped = false;
+            if (autoplay == null) {
+                player.setPlayWhenReady(playWhenReady);
+                if (playWhenReady) {
+                    persistPlayingState();
+                } else if (!wasStopped) {
+                    persistPausedState();
+                }
+            } else if (autoplay) {
+                persistPlayingState();
+            } else {
+                persistPausedState();
             }
             startMetadataPollingIfNeeded();
             return;
         }
 
         rebuildQueue(items, currentItemId, startIndex, startPosSeconds, true);
-        if (autoplay) {
-            player.play();
-            isStopped = false;
+        if (autoplay == null || autoplay) {
+            persistPlayingState();
+        } else {
+            persistPausedState();
         }
         startMetadataPollingIfNeeded();
     }
@@ -468,6 +479,22 @@ final class QueuePlayer implements Player.Listener {
         updateCustomLayoutIfNeeded();
     }
 
+    private void persistPausedState() {
+        player.pause();
+        isStopped = false;
+        status = "paused";
+        bumpStateRevision();
+        persist();
+    }
+
+    private void persistPlayingState() {
+        player.play();
+        isStopped = false;
+        status = "playing";
+        bumpStateRevision();
+        persist();
+    }
+
     private void clearQueueInternal() {
         stopMetadataPolling();
         stopProgressUpdates();
@@ -518,12 +545,17 @@ final class QueuePlayer implements Player.Listener {
 
     private void setRepeatMode(String mode) {
         repeatMode = mode != null ? mode : "off";
-        int media3Mode = Player.REPEAT_MODE_OFF;
-        if ("one".equals(repeatMode)) media3Mode = Player.REPEAT_MODE_ONE;
-        else if ("all".equals(repeatMode)) media3Mode = Player.REPEAT_MODE_ALL;
-        player.setRepeatMode(media3Mode);
+        applyEffectiveRepeatModeToPlayer();
         bumpStateRevision();
         persist();
+    }
+
+    private void applyEffectiveRepeatModeToPlayer() {
+        int media3Mode = Player.REPEAT_MODE_OFF;
+        String effectiveRepeatMode = options.autoplayNext ? repeatMode : "off";
+        if ("one".equals(effectiveRepeatMode)) media3Mode = Player.REPEAT_MODE_ONE;
+        else if ("all".equals(effectiveRepeatMode)) media3Mode = Player.REPEAT_MODE_ALL;
+        player.setRepeatMode(media3Mode);
     }
 
     private void setShuffle(boolean enabled) {
@@ -578,6 +610,8 @@ final class QueuePlayer implements Player.Listener {
         options = QueueModels.PlaybackOptions.fromPartialJson(args, options);
         // Update skip increments for OS skip buttons
         applySeekIncrements();
+        applyAutoplayNextToPlayer();
+        applyEffectiveRepeatModeToPlayer();
         bumpStateRevision();
         persist();
     }
@@ -596,6 +630,20 @@ final class QueuePlayer implements Player.Listener {
                 .getClass()
                 .getMethod("setSeekForwardIncrementMs", long.class)
                 .invoke(player, fwdMs);
+        } catch (Exception ignored) {}
+    }
+
+    private void applyAutoplayNextToPlayer() {
+        boolean pauseAtEnd = !options.autoplayNext;
+        try {
+            player.setPauseAtEndOfMediaItems(pauseAtEnd);
+            return;
+        } catch (Throwable ignored) {}
+        try {
+            player
+                .getClass()
+                .getMethod("setPauseAtEndOfMediaItems", boolean.class)
+                .invoke(player, pauseAtEnd);
         } catch (Exception ignored) {}
     }
 
@@ -677,6 +725,7 @@ final class QueuePlayer implements Player.Listener {
                 options
             );
             applySeekIncrements();
+            applyAutoplayNextToPlayer();
             progressByItemId.clear();
             progressByItemId.putAll(
                 QueueModels.progressMapFromJson(root.optJSONObject("progressByItemId"))
@@ -699,10 +748,7 @@ final class QueuePlayer implements Player.Listener {
             rebuildQueue(items, desiredId, idx, pos, false);
             // Apply restored playback modes directly (avoid persisting while restoring).
             try {
-                int media3Mode = Player.REPEAT_MODE_OFF;
-                if ("one".equals(repeatMode)) media3Mode = Player.REPEAT_MODE_ONE;
-                else if ("all".equals(repeatMode)) media3Mode = Player.REPEAT_MODE_ALL;
-                player.setRepeatMode(media3Mode);
+                applyEffectiveRepeatModeToPlayer();
                 player.setShuffleModeEnabled(shuffle);
             } catch (Exception ignored) {}
         } catch (Exception e) {
