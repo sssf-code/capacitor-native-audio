@@ -78,6 +78,9 @@ final class QueuePlayer implements Player.Listener {
 
     private boolean isRestoring = false;
     private boolean isStopped = true;
+    private boolean playlistFinishInProgress = false;
+    /** Terminal natural end; merged only for JS getState, not persistence. */
+    private @Nullable JSONObject playlistFinishedExtras = null;
 
     private final ScheduledExecutorService metadataScheduler =
         Executors.newSingleThreadScheduledExecutor();
@@ -226,7 +229,7 @@ final class QueuePlayer implements Player.Listener {
             }
             if (CMD_GET_STATE.equals(action)) {
                 BundleJson bundle = new BundleJson();
-                bundle.putJSONObject("state", getStateJson());
+                bundle.putJSONObject("state", getStateJson(true));
                 return Futures.immediateFuture(
                     new SessionResult(SessionResult.RESULT_SUCCESS, bundle.toBundle())
                 );
@@ -507,6 +510,37 @@ final class QueuePlayer implements Player.Listener {
         updateCustomLayoutIfNeeded();
     }
 
+    private boolean maybeFinishPlaylistAtEnd(Player player) {
+        if (playlistFinishInProgress) return false;
+        if (queue.isEmpty()) return false;
+        int idx = player.getCurrentMediaItemIndex();
+        if (idx == C.INDEX_UNSET) return false;
+        if (idx != queue.size() - 1) return false;
+        int rm = player.getRepeatMode();
+        if (rm == Player.REPEAT_MODE_ONE || rm == Player.REPEAT_MODE_ALL) return false;
+
+        playlistFinishInProgress = true;
+        try {
+            try {
+                JSONObject extras = new JSONObject();
+                extras.put("playlistFinished", true);
+                extras.put("status", "stopped");
+                extras.put("currentIndex", idx);
+                String id = getCurrentItemId();
+                if (id != null) extras.put("currentItemId", id);
+                extras.put("position", player.getCurrentPosition() / 1000.0);
+                long durMs = player.getDuration();
+                if (durMs != C.TIME_UNSET && durMs > 0) extras.put("duration", durMs / 1000.0);
+                playlistFinishedExtras = extras;
+                bumpStateRevision();
+            } catch (JSONException ignored) {}
+            clearQueueInternal();
+            return true;
+        } finally {
+            playlistFinishInProgress = false;
+        }
+    }
+
     // MARK: - Playback helpers
 
     private void skipToPreviousWithThreshold() {
@@ -674,7 +708,7 @@ final class QueuePlayer implements Player.Listener {
         return obj;
     }
 
-    JSONObject getStateJson() throws JSONException {
+    JSONObject getStateJson(boolean applyPlaylistFinishedOverlay) throws JSONException {
         JSONObject obj = new JSONObject();
         obj.put("stateRevision", stateRevision);
         obj.put("queueRevision", queueRevision);
@@ -690,6 +724,15 @@ final class QueuePlayer implements Player.Listener {
         obj.put("volume", player.getVolume() * 100.0);
         obj.put("repeatMode", repeatMode);
         obj.put("shuffle", shuffle);
+        if (applyPlaylistFinishedOverlay && playlistFinishedExtras != null) {
+            JSONObject overlay = playlistFinishedExtras;
+            playlistFinishedExtras = null;
+            java.util.Iterator<String> keys = overlay.keys();
+            while (keys.hasNext()) {
+                String k = keys.next();
+                obj.put(k, overlay.get(k));
+            }
+        }
         return obj;
     }
 
@@ -707,7 +750,7 @@ final class QueuePlayer implements Player.Listener {
 
             root.put("progressByItemId", QueueModels.progressMapToJson(progressByItemId));
             root.put("options", options.toJson());
-            root.put("state", getStateJson());
+            root.put("state", getStateJson(false));
             store.save(root);
         } catch (Exception e) {
             // ignore
@@ -780,17 +823,24 @@ final class QueuePlayer implements Player.Listener {
             events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) ||
             events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED)
         ) {
+            boolean finishedPlaylistCleared = false;
             if (player.getPlaybackState() == Player.STATE_ENDED) {
-                status = "stopped";
-                isStopped = true;
+                finishedPlaylistCleared = maybeFinishPlaylistAtEnd(player);
+                if (!finishedPlaylistCleared) {
+                    status = "stopped";
+                    isStopped = true;
+                }
             } else if (player.getPlayWhenReady()) {
                 status = "playing";
                 isStopped = false;
             } else if (!isStopped) {
                 status = "paused";
             }
-            bumpStateRevision();
-            persist();
+
+            if (!finishedPlaylistCleared) {
+                bumpStateRevision();
+                persist();
+            }
 
             if (player.getPlayWhenReady()) {
                 startProgressUpdatesIfNeeded();
@@ -798,7 +848,7 @@ final class QueuePlayer implements Player.Listener {
             } else {
                 stopProgressUpdates();
                 stopMetadataPolling();
-                snapshotProgressOnce();
+                if (!finishedPlaylistCleared) snapshotProgressOnce();
             }
         }
 

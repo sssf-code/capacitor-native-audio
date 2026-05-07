@@ -190,6 +190,7 @@ final class NativeQueuePlayer {
 
     func clearQueue() {
         stopMetadataPolling()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         queue = []
         baseQueue = []
         shuffleQueue = nil
@@ -200,6 +201,7 @@ final class NativeQueuePlayer {
         state.position = 0
         state.duration = nil
         state.status = .stopped
+        state.playlistFinished = nil
         isStopped = true
 
         bumpQueueRevision()
@@ -763,6 +765,11 @@ final class NativeQueuePlayer {
         }
 
         if !shouldAutoplayNext {
+            let isFinalItem = idx == queue.count - 1
+            if isFinalItem {
+                finalizePlaylistConsumption(endedPosition: endedPosition, endedDuration: endedDuration)
+                return
+            }
             player.pause()
             isStopped = false
             state.status = .paused
@@ -806,27 +813,21 @@ final class NativeQueuePlayer {
             return
         }
 
-        // Last track ended: pause at end and keep queue/session active so user can seek and play again.
-        // Only explicit stop() (e.g. close button) should deactivate the audio session.
+        finalizePlaylistConsumption(endedPosition: endedPosition, endedDuration: endedDuration)
+    }
+
+    private func finalizePlaylistConsumption(endedPosition: Double, endedDuration: Double?) {
         player.pause()
-        isStopped = false
-        state.status = .paused
+        stopMetadataPolling()
+        isStopped = true
+        state.status = .stopped
         state.position = endedPosition
         state.duration = endedDuration
+        state.playlistFinished = true
         bumpStateRevision()
         persist()
-        stopMetadataPolling()
-        // Notify after seek completes so published position matches the actual player time.
-        let notifyAfterSeek = { [weak self] in
-            guard let self else { return }
-            self.notifyStateChange()
-            self.refreshNowPlaying()
-        }
-        if endedPosition > 0 {
-            player.seek(to: CMTime(seconds: endedPosition, preferredTimescale: seekTimescale)) { _ in notifyAfterSeek() }
-        } else {
-            notifyAfterSeek()
-        }
+        notifyStateChange(retainUntilConsumed: true)
+        clearQueue()
     }
 
     private func updateStateFromPlayer() {
@@ -1033,8 +1034,8 @@ final class NativeQueuePlayer {
 
     // MARK: - Events
 
-    private func notifyStateChange() {
-        plugin?.notifyListeners("stateChange", data: stateToJS(), retainUntilConsumed: false)
+    private func notifyStateChange(retainUntilConsumed: Bool = false) {
+        plugin?.notifyListeners("stateChange", data: stateToJS(), retainUntilConsumed: retainUntilConsumed)
     }
 
     private func notifyTrackChange() {
@@ -1106,6 +1107,9 @@ final class NativeQueuePlayer {
         ]
         obj["currentItemId"] = state.currentItemId as Any
         if let dur = state.duration { obj["duration"] = dur }
+        if state.playlistFinished == true {
+            obj["playlistFinished"] = true
+        }
         return obj
     }
 

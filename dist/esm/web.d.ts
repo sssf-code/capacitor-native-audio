@@ -43,6 +43,7 @@ export declare class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlug
     private refreshMediaSessionState;
     private updateMediaSessionHandlers;
     private emitStateChange;
+    private emitPlaylistFinishedAndResetQueue;
     private emitPassiveStateSnapshot;
     private emitTrackChange;
     private emitQueueChange;

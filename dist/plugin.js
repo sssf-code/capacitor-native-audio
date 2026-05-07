@@ -361,6 +361,11 @@ var capacitorAudioPlayer = (function (exports, core) {
             this.updateMediaSessionPositionState();
             await this.notifyListeners('stateChange', this.buildState());
         }
+        async emitPlaylistFinishedAndResetQueue() {
+            this.bumpStateRevision();
+            await this.notifyListeners('stateChange', Object.assign(Object.assign({}, this.buildState()), { playlistFinished: true }));
+            await this.resetQueueState();
+        }
         emitPassiveStateSnapshot() {
             if (!this.audio) {
                 return;
@@ -623,6 +628,7 @@ var capacitorAudioPlayer = (function (exports, core) {
             const item = this.getCurrentItem();
             const now = Date.now();
             const shouldAutoplayNext = this.playbackOptions.autoplayNext !== false;
+            const lastIndex = this.queue.length - 1;
             if (item) {
                 const existing = this.progress.get(item.id);
                 const durationSeconds = (_b = (_a = this.getCurrentDuration()) !== null && _a !== void 0 ? _a : existing === null || existing === void 0 ? void 0 : existing.durationSeconds) !== null && _b !== void 0 ? _b : 0;
@@ -640,12 +646,15 @@ var capacitorAudioPlayer = (function (exports, core) {
                 return;
             }
             if (!shouldAutoplayNext) {
+                if (lastIndex >= 0 && this.currentIndex >= lastIndex) {
+                    await this.emitPlaylistFinishedAndResetQueue();
+                    return;
+                }
                 this.stopMetadataPolling();
                 this.status = 'paused';
                 await this.emitStateChange();
                 return;
             }
-            const lastIndex = this.queue.length - 1;
             if (this.currentIndex < lastIndex) {
                 await this.skipToNext();
                 return;
@@ -659,9 +668,7 @@ var capacitorAudioPlayer = (function (exports, core) {
                 });
                 return;
             }
-            this.stopMetadataPolling();
-            this.status = 'stopped';
-            await this.emitStateChange();
+            await this.emitPlaylistFinishedAndResetQueue();
         }
         buildState() {
             var _a;
