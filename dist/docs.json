@@ -924,6 +924,13 @@
           "docs": "",
           "complexTypes": [],
           "type": "boolean"
+        },
+        {
+          "name": "playlistFinished",
+          "tags": [],
+          "docs": "Set when the last queue item finishes with no continuation; one `stateChange` only.",
+          "complexTypes": [],
+          "type": "boolean | undefined"
         }
       ]
     },

@@ -155,6 +155,10 @@ export interface PlayerState {
     volume: number;
     repeatMode: RepeatMode;
     shuffle: boolean;
+    /**
+     * Set when the last queue item finishes with no continuation; one `stateChange` only.
+     */
+    playlistFinished?: boolean;
 }
 
 export interface SetQueueParams {

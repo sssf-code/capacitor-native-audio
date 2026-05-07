@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased](https://github.com/mediagrid/capacitor-native-audio/compare/v4.1.1...HEAD)
+## [v4.1.9](https://github.com/mediagrid/capacitor-native-audio/compare/v4.1.1...v4.1.9) - 2026-05-07
+
+### What's Changed
+
+- fix(iOS): On natural playlist completion (last queue item, no repeat-advance), emit a terminal `stateChange` with `retainUntilConsumed: true`, then `clearQueue()` so Now Playing and the queue are torn down; deactivate the audio session when clearing the queue
+- fix(iOS): With `autoplayNext` off, treat end of the **last** item as playlist completion (clear) instead of only pausing at EOF
+- fix(Android): On `STATE_ENDED` at the last media item with repeat mode off, clear the native queue (notification / session state) instead of leaving a stopped player with items still loaded
+- fix(web): On `ended`, call `resetQueueState()` when the **last** item finishes (or when `autoplayNext` is off and the current item is the last), so the HTML5 player matches native teardown for a finished playlist
 
 ## [v4.1.1](https://github.com/mediagrid/capacitor-native-audio/compare/v4.1.0...v4.1.1) - 2026-03-06
 

@@ -124,6 +124,8 @@ struct PlayerState: Codable, Equatable {
     var volume: Double = 100
     var repeatMode: RepeatMode = .off
     var shuffle: Bool = false
+    /// One-shot; nil after terminal `stateChange` is built and nil in `clearQueue`.
+    var playlistFinished: Bool? = nil
 }
 
 struct PersistedState: Codable {

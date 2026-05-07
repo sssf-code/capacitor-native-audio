@@ -620,19 +620,20 @@ removeAllListeners() => Promise<void>
 
 #### PlayerState
 
-| Prop                | Type                                                      | Description                                                      |
-| ------------------- | --------------------------------------------------------- | ---------------------------------------------------------------- |
-| **`stateRevision`** | <code>number</code>                                       | Monotonic revision that increments on any state change.          |
-| **`queueRevision`** | <code>number</code>                                       | Monotonic revision that increments on any queue topology change. |
-| **`status`**        | <code><a href="#playbackstatus">PlaybackStatus</a></code> |                                                                  |
-| **`currentIndex`**  | <code>number</code>                                       |                                                                  |
-| **`currentItemId`** | <code>string</code>                                       |                                                                  |
-| **`position`**      | <code>number</code>                                       |                                                                  |
-| **`duration`**      | <code>number</code>                                       |                                                                  |
-| **`rate`**          | <code>number</code>                                       |                                                                  |
-| **`volume`**        | <code>number</code>                                       | Volume in 0..100.                                                |
-| **`repeatMode`**    | <code><a href="#repeatmode">RepeatMode</a></code>         |                                                                  |
-| **`shuffle`**       | <code>boolean</code>                                      |                                                                  |
+| Prop                   | Type                                                      | Description                                                                         |
+| ---------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **`stateRevision`**    | <code>number</code>                                       | Monotonic revision that increments on any state change.                             |
+| **`queueRevision`**    | <code>number</code>                                       | Monotonic revision that increments on any queue topology change.                    |
+| **`status`**           | <code><a href="#playbackstatus">PlaybackStatus</a></code> |                                                                                     |
+| **`currentIndex`**     | <code>number</code>                                       |                                                                                     |
+| **`currentItemId`**    | <code>string</code>                                       |                                                                                     |
+| **`position`**         | <code>number</code>                                       |                                                                                     |
+| **`duration`**         | <code>number</code>                                       |                                                                                     |
+| **`rate`**             | <code>number</code>                                       |                                                                                     |
+| **`volume`**           | <code>number</code>                                       | Volume in 0..100.                                                                   |
+| **`repeatMode`**       | <code><a href="#repeatmode">RepeatMode</a></code>         |                                                                                     |
+| **`shuffle`**          | <code>boolean</code>                                      |                                                                                     |
+| **`playlistFinished`** | <code>boolean</code>                                      | Set when the last queue item finishes with no continuation; one `stateChange` only. |
 
 
 #### SetItemProgressParams

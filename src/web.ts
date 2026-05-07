@@ -439,6 +439,12 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         await this.notifyListeners('stateChange', this.buildState());
     }
 
+    private async emitPlaylistFinishedAndResetQueue() {
+        this.bumpStateRevision();
+        await this.notifyListeners('stateChange', { ...this.buildState(), playlistFinished: true });
+        await this.resetQueueState();
+    }
+
     private emitPassiveStateSnapshot() {
         if (!this.audio) {
             return;
@@ -748,6 +754,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         const item = this.getCurrentItem();
         const now = Date.now();
         const shouldAutoplayNext = this.playbackOptions.autoplayNext !== false;
+        const lastIndex = this.queue.length - 1;
 
         if (item) {
             const existing = this.progress.get(item.id);
@@ -768,13 +775,16 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
         }
 
         if (!shouldAutoplayNext) {
+            if (lastIndex >= 0 && this.currentIndex >= lastIndex) {
+                await this.emitPlaylistFinishedAndResetQueue();
+                return;
+            }
             this.stopMetadataPolling();
             this.status = 'paused';
             await this.emitStateChange();
             return;
         }
 
-        const lastIndex = this.queue.length - 1;
         if (this.currentIndex < lastIndex) {
             await this.skipToNext();
             return;
@@ -790,9 +800,7 @@ export class AudioPlayerWeb extends WebPlugin implements AudioPlayerPlugin {
             return;
         }
 
-        this.stopMetadataPolling();
-        this.status = 'stopped';
-        await this.emitStateChange();
+        await this.emitPlaylistFinishedAndResetQueue();
     }
 
     private buildState(): PlayerState {
