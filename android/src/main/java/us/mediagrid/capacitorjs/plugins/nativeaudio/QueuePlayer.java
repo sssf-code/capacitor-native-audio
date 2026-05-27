@@ -354,7 +354,7 @@ final class QueuePlayer implements Player.Listener {
         }
 
         rebuildQueue(items, currentItemId, startIndex, startPosSeconds, true);
-        if (autoplay == null || autoplay) {
+        if (Boolean.TRUE.equals(autoplay)) {
             persistPlayingState();
         } else {
             persistPausedState();
