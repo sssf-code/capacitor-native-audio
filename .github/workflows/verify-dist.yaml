@@ -1,0 +1,44 @@
+name: Verify dist is up to date
+
+# Consumers install this package straight from git and use the committed dist/
+# as-is (there is deliberately no `prepare` script, so pnpm/npm never rebuild it
+# at install time). That makes a stale dist/ a silent way to ship old code —
+# this check rebuilds from source and fails if the committed output differs.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+
+jobs:
+  verify-dist:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Check committed dist matches source
+        run: |
+          git add -A dist
+          if ! git diff --cached --quiet -- dist; then
+            echo "::error::dist/ is stale — run 'npm run build' and commit the result."
+            git diff --cached --stat -- dist
+            exit 1
+          fi
