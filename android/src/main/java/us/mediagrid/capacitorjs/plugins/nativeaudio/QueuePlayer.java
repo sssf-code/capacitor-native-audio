@@ -766,7 +766,13 @@ final class QueuePlayer implements Player.Listener {
         JSONObject root = store.load();
         if (root == null) return;
         if (root.optInt("schemaVersion", -1) != QueueStore.SCHEMA_VERSION) return;
-        long persistedAt = root.optLong("persistedAtEpochMs", 0);
+        // Missing (state persisted by a version before this field existed) is treated as "just
+        // persisted" rather than "infinitely old" - a hard default of 0 would drop every
+        // pre-existing user's queue/position/options on the single update that introduces this
+        // field, which is a worse regression than the bug this guards against. The very next
+        // persist() call backstamps a real timestamp, so staleness is correctly enforced from
+        // the second save onward.
+        long persistedAt = root.optLong("persistedAtEpochMs", System.currentTimeMillis());
         if (System.currentTimeMillis() - persistedAt > MAX_RESTORE_AGE_MS) return;
         isRestoring = true;
         try {

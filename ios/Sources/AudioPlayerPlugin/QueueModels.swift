@@ -136,8 +136,12 @@ struct PersistedState: Codable {
     var progressByItemId: [String: ItemProgress]
     var options: PlaybackOptions
     var state: PlayerState
-    /// Wall-clock time this was written, ms since epoch. Missing (older persisted data) is
-    /// treated as 0 — i.e. too stale to auto-restore, rather than assumed fresh.
+    /// Wall-clock time this was written, ms since epoch. Missing (persisted by a version
+    /// before this field existed) is treated as "just persisted", not "infinitely old" - a
+    /// hard default of 0 would drop every pre-existing user's queue/position/options on the
+    /// single update that introduces this field, worse than the bug this guards against. The
+    /// very next persist() call backstamps a real timestamp, so staleness is correctly
+    /// enforced from the second save onward.
     var persistedAtEpochMs: Double = 0
 
     init(
@@ -166,7 +170,8 @@ struct PersistedState: Codable {
         progressByItemId = try c.decode([String: ItemProgress].self, forKey: .progressByItemId)
         options = try c.decode(PlaybackOptions.self, forKey: .options)
         state = try c.decode(PlayerState.self, forKey: .state)
-        persistedAtEpochMs = try c.decodeIfPresent(Double.self, forKey: .persistedAtEpochMs) ?? 0
+        persistedAtEpochMs = try c.decodeIfPresent(Double.self, forKey: .persistedAtEpochMs)
+            ?? Date().timeIntervalSince1970 * 1000
     }
 }
 

@@ -933,7 +933,11 @@ final class NativeQueuePlayer {
     private func refreshNowPlaying() {
         // Restoring a persisted queue on boot rebuilds internal state, but nothing has been
         // played this process yet — publishing it here would surface stale Now Playing info
-        // on the lock screen/Control Center before the user requested any playback.
+        // on the lock screen/Control Center before the user requested any playback. A restored
+        // session that isn't the freshly-killed-while-playing case handled separately below
+        // (restoreIfAvailable's own explicit republish) stays unpublished here on purpose: the
+        // app's own boot-restore chain owns "show accurate resume info promptly" for that case,
+        // driven by real backend session data rather than this best-effort local cache.
         guard !isRestoring else { return }
         guard queue.indices.contains(state.currentIndex) else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -992,9 +996,11 @@ final class NativeQueuePlayer {
     private static let maxRestoreAgeMs: Double = 14 * 24 * 60 * 60 * 1000
 
     // If the process was killed while genuinely playing (e.g. an OS jetsam) and relaunches
-    // almost immediately, publish Now Playing right away instead of waiting on the app's own
-    // boot-restore chain (auth/network) - within this window a "playing" status is trusted as
-    // still current, not stale.
+    // almost immediately, populate Control Center/lock screen with the correct track right
+    // away instead of leaving it blank until the app's own boot-restore chain (auth/network)
+    // completes. rebuildQueue() always resets status to .stopped on restore (nothing is
+    // actually producing audio right after a kill+relaunch), so this shows a paused card with
+    // the right title/artwork - it does not claim playback is still active.
     private static let publishRestoredNowPlayingThresholdMs: Double = 2 * 60 * 1000
 
     private func persist() {
