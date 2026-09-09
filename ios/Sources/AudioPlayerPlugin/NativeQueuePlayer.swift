@@ -991,6 +991,12 @@ final class NativeQueuePlayer {
     // rather than silently resuming playback the user hasn't touched in a very long time.
     private static let maxRestoreAgeMs: Double = 14 * 24 * 60 * 60 * 1000
 
+    // If the process was killed while genuinely playing (e.g. an OS jetsam) and relaunches
+    // almost immediately, publish Now Playing right away instead of waiting on the app's own
+    // boot-restore chain (auth/network) - within this window a "playing" status is trusted as
+    // still current, not stale.
+    private static let publishRestoredNowPlayingThresholdMs: Double = 2 * 60 * 1000
+
     private func persist() {
         guard !isRestoring else { return }
         let persisted = PersistedState(
@@ -1009,8 +1015,9 @@ final class NativeQueuePlayer {
         guard let persisted = store.load(), persisted.schemaVersion == 1 else { return }
         let ageMs = Date().timeIntervalSince1970 * 1000 - persisted.persistedAtEpochMs
         guard ageMs <= Self.maxRestoreAgeMs else { return }
+        let wasRecentlyPlaying = persisted.state.status == .playing && ageMs <= Self.publishRestoredNowPlayingThresholdMs
+
         isRestoring = true
-        defer { isRestoring = false }
 
         options = persisted.options
         progressByItemId = persisted.progressByItemId
@@ -1028,6 +1035,9 @@ final class NativeQueuePlayer {
             desiredPositionSeconds: persisted.state.position,
             shouldBumpQueueRevision: false
         )
+
+        isRestoring = false
+        if wasRecentlyPlaying { refreshNowPlaying() }
     }
 
     // MARK: - Revisions
