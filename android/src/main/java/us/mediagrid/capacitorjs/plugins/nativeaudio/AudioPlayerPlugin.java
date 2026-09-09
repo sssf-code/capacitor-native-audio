@@ -47,7 +47,11 @@ public class AudioPlayerPlugin extends Plugin {
     @Override
     public void load() {
         super.load();
-        ensureController(null);
+        // Deliberately not pre-warming the MediaController/AudioPlayerService here: binding
+        // to the session service starts it (and restores any persisted queue) immediately,
+        // which surfaced stale "now playing" notifications on app boot before playback was
+        // ever requested. Every real entry point (withController/sendCustom) already binds
+        // the controller lazily on first use.
         registerAudioBecomingNoisyReceiver();
     }
 

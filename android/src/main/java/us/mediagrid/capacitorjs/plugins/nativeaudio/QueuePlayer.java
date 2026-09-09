@@ -738,11 +738,16 @@ final class QueuePlayer implements Player.Listener {
 
     // MARK: - Persistence
 
+    // How long a persisted queue is trusted to auto-restore on boot. Older state is dropped
+    // rather than silently resuming playback the user hasn't touched in a very long time.
+    private static final long MAX_RESTORE_AGE_MS = 14L * 24 * 60 * 60 * 1000;
+
     private void persist() {
         if (isRestoring) return;
         try {
             JSONObject root = new JSONObject();
             root.put("schemaVersion", QueueStore.SCHEMA_VERSION);
+            root.put("persistedAtEpochMs", System.currentTimeMillis());
 
             JSONArray items = new JSONArray();
             for (QueueModels.QueueItem qi : queue) items.put(qi.toJson());
@@ -761,6 +766,8 @@ final class QueuePlayer implements Player.Listener {
         JSONObject root = store.load();
         if (root == null) return;
         if (root.optInt("schemaVersion", -1) != QueueStore.SCHEMA_VERSION) return;
+        long persistedAt = root.optLong("persistedAtEpochMs", 0);
+        if (System.currentTimeMillis() - persistedAt > MAX_RESTORE_AGE_MS) return;
         isRestoring = true;
         try {
             options = QueueModels.PlaybackOptions.fromPartialJson(

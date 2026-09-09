@@ -136,5 +136,37 @@ struct PersistedState: Codable {
     var progressByItemId: [String: ItemProgress]
     var options: PlaybackOptions
     var state: PlayerState
+    /// Wall-clock time this was written, ms since epoch. Missing (older persisted data) is
+    /// treated as 0 — i.e. too stale to auto-restore, rather than assumed fresh.
+    var persistedAtEpochMs: Double = 0
+
+    init(
+        schemaVersion: Int,
+        queue: [QueueItem],
+        baseQueue: [QueueItem],
+        progressByItemId: [String: ItemProgress],
+        options: PlaybackOptions,
+        state: PlayerState,
+        persistedAtEpochMs: Double
+    ) {
+        self.schemaVersion = schemaVersion
+        self.queue = queue
+        self.baseQueue = baseQueue
+        self.progressByItemId = progressByItemId
+        self.options = options
+        self.state = state
+        self.persistedAtEpochMs = persistedAtEpochMs
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        queue = try c.decode([QueueItem].self, forKey: .queue)
+        baseQueue = try c.decode([QueueItem].self, forKey: .baseQueue)
+        progressByItemId = try c.decode([String: ItemProgress].self, forKey: .progressByItemId)
+        options = try c.decode(PlaybackOptions.self, forKey: .options)
+        state = try c.decode(PlayerState.self, forKey: .state)
+        persistedAtEpochMs = try c.decodeIfPresent(Double.self, forKey: .persistedAtEpochMs) ?? 0
+    }
 }
 

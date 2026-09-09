@@ -931,6 +931,10 @@ final class NativeQueuePlayer {
     }
 
     private func refreshNowPlaying() {
+        // Restoring a persisted queue on boot rebuilds internal state, but nothing has been
+        // played this process yet — publishing it here would surface stale Now Playing info
+        // on the lock screen/Control Center before the user requested any playback.
+        guard !isRestoring else { return }
         guard queue.indices.contains(state.currentIndex) else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             return
@@ -983,6 +987,10 @@ final class NativeQueuePlayer {
 
     // MARK: - Persistence
 
+    // How long a persisted queue is trusted to auto-restore on boot. Older state is dropped
+    // rather than silently resuming playback the user hasn't touched in a very long time.
+    private static let maxRestoreAgeMs: Double = 14 * 24 * 60 * 60 * 1000
+
     private func persist() {
         guard !isRestoring else { return }
         let persisted = PersistedState(
@@ -991,13 +999,16 @@ final class NativeQueuePlayer {
             baseQueue: baseQueue,
             progressByItemId: progressByItemId,
             options: options,
-            state: state
+            state: state,
+            persistedAtEpochMs: Date().timeIntervalSince1970 * 1000
         )
         store.save(persisted)
     }
 
     private func restoreIfAvailable() {
         guard let persisted = store.load(), persisted.schemaVersion == 1 else { return }
+        let ageMs = Date().timeIntervalSince1970 * 1000 - persisted.persistedAtEpochMs
+        guard ageMs <= Self.maxRestoreAgeMs else { return }
         isRestoring = true
         defer { isRestoring = false }
 
