@@ -769,12 +769,12 @@ final class QueuePlayer implements Player.Listener {
         // Missing (state persisted by a version before this field existed) is treated as "just
         // persisted" rather than "infinitely old" - a hard default of 0 would drop every
         // pre-existing user's queue/position/options on the single update that introduces this
-        // field, which is a worse regression than the bug this guards against. The very next
-        // persist() call backstamps a real timestamp, so staleness is correctly enforced from
-        // the second save onward.
+        // field, which is a worse regression than the bug this guards against.
+        boolean hadTimestamp = root.has("persistedAtEpochMs");
         long persistedAt = root.optLong("persistedAtEpochMs", System.currentTimeMillis());
         if (System.currentTimeMillis() - persistedAt > MAX_RESTORE_AGE_MS) return;
         isRestoring = true;
+        boolean restored = false;
         try {
             options = QueueModels.PlaybackOptions.fromPartialJson(
                 root.optJSONObject("options"),
@@ -807,11 +807,18 @@ final class QueuePlayer implements Player.Listener {
                 applyEffectiveRepeatModeToPlayer();
                 player.setShuffleModeEnabled(shuffle);
             } catch (Exception ignored) {}
+            restored = true;
         } catch (Exception e) {
             Log.w(TAG, "restore failed", e);
         } finally {
             isRestoring = false;
         }
+        // Backstamp legacy (pre-field) state immediately, not just on the next mutation - an
+        // untouched queue the user never interacts with would otherwise keep decoding as "just
+        // persisted" on every single launch, and the 14-day guard would never actually apply to
+        // it. Only on a successful restore: persisting after a partial/failed one would write
+        // back whatever inconsistent state the exception left behind.
+        if (!hadTimestamp && restored) persist();
     }
 
     // MARK: - Revisions

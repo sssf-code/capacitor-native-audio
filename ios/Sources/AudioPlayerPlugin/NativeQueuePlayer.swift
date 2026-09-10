@@ -1019,6 +1019,7 @@ final class NativeQueuePlayer {
 
     private func restoreIfAvailable() {
         guard let persisted = store.load(), persisted.schemaVersion == 1 else { return }
+        let hadTimestamp = store.hasPersistedAtEpochMs()
         let ageMs = Date().timeIntervalSince1970 * 1000 - persisted.persistedAtEpochMs
         guard ageMs <= Self.maxRestoreAgeMs else { return }
         let wasRecentlyPlaying = persisted.state.status == .playing && ageMs <= Self.publishRestoredNowPlayingThresholdMs
@@ -1044,6 +1045,11 @@ final class NativeQueuePlayer {
 
         isRestoring = false
         if wasRecentlyPlaying { refreshNowPlaying() }
+        // Backstamp legacy (pre-field) state immediately, not just on the next mutation - an
+        // untouched queue the user never interacts with would otherwise keep decoding as "just
+        // persisted" on every single launch, and the 14-day guard would never actually apply
+        // to it.
+        if !hadTimestamp { persist() }
     }
 
     // MARK: - Revisions
