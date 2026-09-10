@@ -738,11 +738,16 @@ final class QueuePlayer implements Player.Listener {
 
     // MARK: - Persistence
 
+    // How long a persisted queue is trusted to auto-restore on boot. Older state is dropped
+    // rather than silently resuming playback the user hasn't touched in a very long time.
+    private static final long MAX_RESTORE_AGE_MS = 14L * 24 * 60 * 60 * 1000;
+
     private void persist() {
         if (isRestoring) return;
         try {
             JSONObject root = new JSONObject();
             root.put("schemaVersion", QueueStore.SCHEMA_VERSION);
+            root.put("persistedAtEpochMs", System.currentTimeMillis());
 
             JSONArray items = new JSONArray();
             for (QueueModels.QueueItem qi : queue) items.put(qi.toJson());
@@ -761,7 +766,15 @@ final class QueuePlayer implements Player.Listener {
         JSONObject root = store.load();
         if (root == null) return;
         if (root.optInt("schemaVersion", -1) != QueueStore.SCHEMA_VERSION) return;
+        // Missing (state persisted by a version before this field existed) is treated as "just
+        // persisted" rather than "infinitely old" - a hard default of 0 would drop every
+        // pre-existing user's queue/position/options on the single update that introduces this
+        // field, which is a worse regression than the bug this guards against.
+        boolean hadTimestamp = root.has("persistedAtEpochMs");
+        long persistedAt = root.optLong("persistedAtEpochMs", System.currentTimeMillis());
+        if (System.currentTimeMillis() - persistedAt > MAX_RESTORE_AGE_MS) return;
         isRestoring = true;
+        boolean restored = false;
         try {
             options = QueueModels.PlaybackOptions.fromPartialJson(
                 root.optJSONObject("options"),
@@ -794,11 +807,18 @@ final class QueuePlayer implements Player.Listener {
                 applyEffectiveRepeatModeToPlayer();
                 player.setShuffleModeEnabled(shuffle);
             } catch (Exception ignored) {}
+            restored = true;
         } catch (Exception e) {
             Log.w(TAG, "restore failed", e);
         } finally {
             isRestoring = false;
         }
+        // Backstamp legacy (pre-field) state immediately, not just on the next mutation - an
+        // untouched queue the user never interacts with would otherwise keep decoding as "just
+        // persisted" on every single launch, and the 14-day guard would never actually apply to
+        // it. Only on a successful restore: persisting after a partial/failed one would write
+        // back whatever inconsistent state the exception left behind.
+        if (!hadTimestamp && restored) persist();
     }
 
     // MARK: - Revisions

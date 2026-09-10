@@ -47,7 +47,11 @@ public class AudioPlayerPlugin extends Plugin {
     @Override
     public void load() {
         super.load();
-        ensureController(null);
+        // Deliberately not pre-warming the MediaController/AudioPlayerService here: binding
+        // to the session service starts it (and restores any persisted queue) immediately,
+        // which surfaced stale "now playing" notifications on app boot before playback was
+        // ever requested. Every real entry point (withController/sendCustom) already binds
+        // the controller lazily on first use.
         registerAudioBecomingNoisyReceiver();
     }
 
@@ -104,6 +108,16 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void getQueue(PluginCall call) {
+        if (!isControllerBound()) {
+            // Nothing has bound the session yet - a read-only inquiry must not be what
+            // starts it (see getState() below for why).
+            JSObject empty = new JSObject();
+            empty.put("queueRevision", 0);
+            empty.put("items", new org.json.JSONArray());
+            empty.put("currentIndex", 0);
+            call.resolve(empty);
+            return;
+        }
         sendCustom(call, QueuePlayer.CMD_GET_QUEUE, new JSONObject(), result -> {
             String json = result.extras != null ? result.extras.getString("queue") : null;
             call.resolve(json != null ? new JSObject(json) : new JSObject());
@@ -211,6 +225,27 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void getState(PluginCall call) {
+        if (!isControllerBound()) {
+            // A read-only status check (e.g. the app's foreground-reconciliation sync)
+            // must not be what binds the MediaController for the first time: binding
+            // starts AudioPlayerService, whose QueuePlayer restores the persisted queue
+            // and is enough to surface a stale system notification before the user has
+            // ever requested playback (sssf-code/sssf-app#2955). Only a real playback or
+            // queue-mutation command (play/setQueue/etc., via withController/sendCustom)
+            // is allowed to bind for the first time; report "nothing loaded" instead.
+            JSObject idle = new JSObject();
+            idle.put("stateRevision", 0);
+            idle.put("queueRevision", 0);
+            idle.put("status", "stopped");
+            idle.put("currentIndex", 0);
+            idle.put("position", 0.0);
+            idle.put("rate", 1.0);
+            idle.put("volume", 100.0);
+            idle.put("repeatMode", "off");
+            idle.put("shuffle", false);
+            call.resolve(idle);
+            return;
+        }
         sendCustom(call, QueuePlayer.CMD_GET_STATE, new JSONObject(), result -> {
             String json = result.extras != null ? result.extras.getString("state") : null;
             call.resolve(json != null ? new JSObject(json) : new JSObject());
@@ -229,6 +264,13 @@ public class AudioPlayerPlugin extends Plugin {
         String itemId = call.getString("itemId");
         if (itemId == null || itemId.trim().isEmpty()) {
             call.reject("Missing required parameter 'itemId'.");
+            return;
+        }
+        if (!isControllerBound()) {
+            JSObject noProgress = new JSObject();
+            noProgress.put("itemId", itemId);
+            noProgress.put("positionSeconds", 0.0);
+            call.resolve(noProgress);
             return;
         }
         JSObject obj = new JSObject();
@@ -272,6 +314,14 @@ public class AudioPlayerPlugin extends Plugin {
 
     @PluginMethod
     public void getPlaybackOptions(PluginCall call) {
+        if (!isControllerBound()) {
+            try {
+                call.resolve(new JSObject(QueueModels.PlaybackOptions.defaults().toJson().toString()));
+            } catch (Exception e) {
+                call.resolve(new JSObject());
+            }
+            return;
+        }
         sendCustom(call, QueuePlayer.CMD_GET_OPTIONS, new JSONObject(), result -> {
             String json = result.extras != null ? result.extras.getString("options") : null;
             call.resolve(json != null ? new JSObject(json) : new JSObject());
@@ -279,6 +329,14 @@ public class AudioPlayerPlugin extends Plugin {
     }
 
     // MARK: - Controller plumbing + event emission
+
+    /** True once something has bound (or is binding) the session - i.e. a real playback or
+     *  queue command has run at least once this process. Read-only queries check this before
+     *  calling ensureController(), so a status check alone can never be what starts
+     *  AudioPlayerService for the first time. */
+    private boolean isControllerBound() {
+        return controller != null || controllerFuture != null;
+    }
 
     private void ensureController(@Nullable PluginCall callToReject) {
         if (controller != null) return;

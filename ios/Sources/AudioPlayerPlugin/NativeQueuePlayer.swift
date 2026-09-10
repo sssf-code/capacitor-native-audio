@@ -931,6 +931,14 @@ final class NativeQueuePlayer {
     }
 
     private func refreshNowPlaying() {
+        // Restoring a persisted queue on boot rebuilds internal state, but nothing has been
+        // played this process yet — publishing it here would surface stale Now Playing info
+        // on the lock screen/Control Center before the user requested any playback. A restored
+        // session that isn't the freshly-killed-while-playing case handled separately below
+        // (restoreIfAvailable's own explicit republish) stays unpublished here on purpose: the
+        // app's own boot-restore chain owns "show accurate resume info promptly" for that case,
+        // driven by real backend session data rather than this best-effort local cache.
+        guard !isRestoring else { return }
         guard queue.indices.contains(state.currentIndex) else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             return
@@ -983,6 +991,18 @@ final class NativeQueuePlayer {
 
     // MARK: - Persistence
 
+    // How long a persisted queue is trusted to auto-restore on boot. Older state is dropped
+    // rather than silently resuming playback the user hasn't touched in a very long time.
+    private static let maxRestoreAgeMs: Double = 14 * 24 * 60 * 60 * 1000
+
+    // If the process was killed while genuinely playing (e.g. an OS jetsam) and relaunches
+    // almost immediately, populate Control Center/lock screen with the correct track right
+    // away instead of leaving it blank until the app's own boot-restore chain (auth/network)
+    // completes. rebuildQueue() always resets status to .stopped on restore (nothing is
+    // actually producing audio right after a kill+relaunch), so this shows a paused card with
+    // the right title/artwork - it does not claim playback is still active.
+    private static let publishRestoredNowPlayingThresholdMs: Double = 2 * 60 * 1000
+
     private func persist() {
         guard !isRestoring else { return }
         let persisted = PersistedState(
@@ -991,15 +1011,20 @@ final class NativeQueuePlayer {
             baseQueue: baseQueue,
             progressByItemId: progressByItemId,
             options: options,
-            state: state
+            state: state,
+            persistedAtEpochMs: Date().timeIntervalSince1970 * 1000
         )
         store.save(persisted)
     }
 
     private func restoreIfAvailable() {
         guard let persisted = store.load(), persisted.schemaVersion == 1 else { return }
+        let hadTimestamp = store.hasPersistedAtEpochMs()
+        let ageMs = Date().timeIntervalSince1970 * 1000 - persisted.persistedAtEpochMs
+        guard ageMs <= Self.maxRestoreAgeMs else { return }
+        let wasRecentlyPlaying = persisted.state.status == .playing && ageMs <= Self.publishRestoredNowPlayingThresholdMs
+
         isRestoring = true
-        defer { isRestoring = false }
 
         options = persisted.options
         progressByItemId = persisted.progressByItemId
@@ -1017,6 +1042,14 @@ final class NativeQueuePlayer {
             desiredPositionSeconds: persisted.state.position,
             shouldBumpQueueRevision: false
         )
+
+        isRestoring = false
+        if wasRecentlyPlaying { refreshNowPlaying() }
+        // Backstamp legacy (pre-field) state immediately, not just on the next mutation - an
+        // untouched queue the user never interacts with would otherwise keep decoding as "just
+        // persisted" on every single launch, and the 14-day guard would never actually apply
+        // to it.
+        if !hadTimestamp { persist() }
     }
 
     // MARK: - Revisions

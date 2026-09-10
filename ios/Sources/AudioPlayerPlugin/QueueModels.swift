@@ -136,5 +136,42 @@ struct PersistedState: Codable {
     var progressByItemId: [String: ItemProgress]
     var options: PlaybackOptions
     var state: PlayerState
+    /// Wall-clock time this was written, ms since epoch. Missing (persisted by a version
+    /// before this field existed) is treated as "just persisted", not "infinitely old" - a
+    /// hard default of 0 would drop every pre-existing user's queue/position/options on the
+    /// single update that introduces this field, worse than the bug this guards against. The
+    /// very next persist() call backstamps a real timestamp, so staleness is correctly
+    /// enforced from the second save onward.
+    var persistedAtEpochMs: Double = 0
+
+    init(
+        schemaVersion: Int,
+        queue: [QueueItem],
+        baseQueue: [QueueItem],
+        progressByItemId: [String: ItemProgress],
+        options: PlaybackOptions,
+        state: PlayerState,
+        persistedAtEpochMs: Double
+    ) {
+        self.schemaVersion = schemaVersion
+        self.queue = queue
+        self.baseQueue = baseQueue
+        self.progressByItemId = progressByItemId
+        self.options = options
+        self.state = state
+        self.persistedAtEpochMs = persistedAtEpochMs
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        queue = try c.decode([QueueItem].self, forKey: .queue)
+        baseQueue = try c.decode([QueueItem].self, forKey: .baseQueue)
+        progressByItemId = try c.decode([String: ItemProgress].self, forKey: .progressByItemId)
+        options = try c.decode(PlaybackOptions.self, forKey: .options)
+        state = try c.decode(PlayerState.self, forKey: .state)
+        persistedAtEpochMs = try c.decodeIfPresent(Double.self, forKey: .persistedAtEpochMs)
+            ?? Date().timeIntervalSince1970 * 1000
+    }
 }
 
