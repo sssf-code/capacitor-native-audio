@@ -346,7 +346,15 @@ public class AudioPlayerPlugin extends Plugin {
         ComponentName serviceComponent = new ComponentName(context, AudioPlayerService.class);
         SessionToken token = new SessionToken(context, serviceComponent);
 
-        final ListenableFuture<MediaController> future = new MediaController.Builder(context, token).buildAsync();
+        // Pin the controller to the main looper explicitly. The builder otherwise adopts the
+        // calling thread's looper, and now that binding is lazy the caller is always a
+        // @PluginMethod on Capacitor's "CapacitorPlugins" HandlerThread (load() used to bind on
+        // main). Every command below is dispatched through mainHandler, so a controller owned
+        // by any other looper fails Media3's verifyApplicationThread() on each call and
+        // surfaces as "Command failed: <action>".
+        final ListenableFuture<MediaController> future = new MediaController.Builder(context, token)
+            .setApplicationLooper(Looper.getMainLooper())
+            .buildAsync();
         controllerFuture = future;
         future.addListener(() -> {
             try {
